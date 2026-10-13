@@ -25,6 +25,7 @@ import { DEFAULT_TEMPLATE_ID } from '../lib/structuralBalanceTemplates.js'
 
 import { WC_DEFAULT } from '../lib/workout-controls.js'
 import { sanitizeAccent } from '../lib/accent.js'
+import { nutritionDefault } from '../lib/nutrition-plans.js'
 
 const KEY = 'gym_state_v1'
 // Where the saved copy stands with the server: the revision it descends from, and its own `_ts`
@@ -161,6 +162,8 @@ export const DEF = {
   // kind of code the gym issued. Just data, so it syncs and backs up like everything else.
   //   [{ id, label, value, fmt }]
   gymCards: [],
+  // Meal plans and foods (fork feature, docs/NUTRITION.md). One key, synced as a whole.
+  nutrition: nutritionDefault(),
   // The card the check-in screen last settled on, so it reopens where you left it (handy when
   // you have more than one gym). Holds a gymCards id, or null before any card exists / is chosen;
   // a stale id (card since removed) is simply ignored by the view.
