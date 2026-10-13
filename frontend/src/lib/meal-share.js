@@ -88,15 +88,15 @@ const sameValues = (a, b) => ['kcal', 'protein', 'carbs', 'fat'].every(k => (a[k
 const key = s => String(s).trim().toLowerCase()
 
 function mergeFoods(n, foods) {
-  const map = {}
+  const map = new Map()
   for (const f of foods) {
     const twin = n.foods.find(x => key(x.name) === key(f.name) && sameValues(x, f))
-    if (twin) { map[f.id] = twin.id; continue }
+    if (twin) { map.set(f.id, twin.id); continue }
     const clash = n.foods.some(x => key(x.name) === key(f.name))
     const added = cleanFood({ ...f, id: undefined, name: clash ? `${f.name} (imported)` : f.name, source: 'import' })
     added.id = uid()
     n.foods.push(added)
-    map[f.id] = added.id
+    map.set(f.id, added.id)
   }
   return map
 }
@@ -104,12 +104,12 @@ function mergeFoods(n, foods) {
 export function importMealPlan(n, parsed, { mode, start, ws, today }) {
   const foodMap = mergeFoods(n, parsed.foods)
   const phases = parsed.phases.map(p => {
-    const dtMap = {}
+    const dtMap = new Map()
     const dayTypes = p.dayTypes.map(dt => {
-      const id = uid(); dtMap[dt.id] = id
-      return { ...clone(dt), id, meals: dt.meals.map(m => ({ id: uid(), name: m.name, items: m.items.map(i => ({ id: uid(), foodId: foodMap[i.foodId], grams: i.grams })) })) }
+      const id = uid(); dtMap.set(dt.id, id)
+      return { ...clone(dt), id, meals: dt.meals.map(m => ({ id: uid(), name: m.name, items: m.items.map(i => ({ id: uid(), foodId: foodMap.get(i.foodId), grams: i.grams })) })) }
     })
-    return { id: uid(), name: p.name, weeks: p.weeks, dayTypes, week: Object.fromEntries(WEEKDAYS.map(k => [k, dtMap[p.week[k]]])) }
+    return { id: uid(), name: p.name, weeks: p.weeks, dayTypes, week: Object.fromEntries(WEEKDAYS.map(k => [k, dtMap.get(p.week[k])])) }
   })
   const plan = { name: parsed.name, start: weekStartDate(start || today, ws), afterLast: parsed.afterLast, phases }
   if (mode === 'replace') {

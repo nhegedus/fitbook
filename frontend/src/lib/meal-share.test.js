@@ -127,3 +127,31 @@ describe('import', () => {
     expect(n2.foods[1].source).toBe('import')
   })
 })
+
+describe('ids that collide with object internals', () => {
+  it('keeps week and item references pointing at real ids when a file uses "__proto__"', () => {
+    const raw = {
+      opengym_meals: 2, name: 'Proto',
+      phases: [{
+        name: 'A', weeks: null,
+        dayTypes: [{ id: '__proto__', name: 'Day', meals: [{ name: 'M', items: [{ foodId: '__proto__', grams: 100 }] }] }],
+        week: { '0': '__proto__', '1': '__proto__', '2': '__proto__', '3': '__proto__', '4': '__proto__', '5': '__proto__', '6': '__proto__' },
+      }],
+      foods: [{ id: '__proto__', name: 'Rice', kcal: 130, protein: 2, carbs: 28, fat: 0 }],
+    }
+    const parsed = parseMealPlan(JSON.stringify(raw))
+    const n = ensureNutrition({})
+    ensureMine(n, TODAY, MON)
+    const id = importMealPlan(n, parsed, { mode: 'new', start: TODAY, ws: MON, today: TODAY })
+    const phase = n.plans.find(p => p.id === id).phases[0]
+    const dtIds = phase.dayTypes.map(d => d.id)
+    for (const v of Object.values(phase.week)) {
+      expect(typeof v).toBe('string')
+      expect(dtIds).toContain(v)
+    }
+    const item = phase.dayTypes[0].meals[0].items[0]
+    expect(typeof item.foodId).toBe('string')
+    expect(n.foods.map(f => f.id)).toContain(item.foodId)
+    expect(n.foods.find(f => f.id === item.foodId).name).toBe('Rice')
+  })
+})
