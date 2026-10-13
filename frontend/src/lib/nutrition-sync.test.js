@@ -13,6 +13,9 @@ describe('nutrition in state and sync', () => {
     const loaded = Object.assign(structuredClone(DEF), { workouts: [] })
     expect(loaded.nutrition.plans).toEqual([])
   })
+  // Each copy's `_ts` equals its stamp time on purpose: the store's update() sets both in one go
+  // (`S._ts = stampChange(prev, S, Date.now())`, whose last step is `stampEdits(prev, next, now)`
+  // in useStore.js / lib/sync-merge.js), so in the real app they never disagree.
   it('the later edit wins as a whole', () => {
     const base = { _ts: 1, workouts: [], routines: [], nutrition: nutritionDefault() }
     const a = structuredClone(base), b = structuredClone(base)
@@ -23,10 +26,14 @@ describe('nutrition in state and sync', () => {
     expect(mergeStates(a, b).nutrition.foods.map(f => f.id)).toEqual(['fb'])
     expect(mergeStates(b, a).nutrition.foods.map(f => f.id)).toEqual(['fb'])
   })
-  it('a copy that never had the key does not wipe it', () => {
+  // The key-less copy is the older one. A NEWER copy without the key can only come from an app
+  // version before this feature; that case is covered on the server by `keepUnknown`
+  // (api/test/nutrition-keep.test.js), since every current-app copy carries the key via the DEF overlay.
+  it('a copy that never had the key does not wipe it, in either order', () => {
     const withIt = { _ts: 200, workouts: [], routines: [], nutrition: { ...nutritionDefault(), mine: 'p1' } }
     stampEdits({ _ts: 1, workouts: [], routines: [] }, withIt, 200)
     const without = { _ts: 100, workouts: [], routines: [] }
     expect(mergeStates(withIt, without).nutrition.mine).toBe('p1')
+    expect(mergeStates(without, withIt).nutrition.mine).toBe('p1')
   })
 })
