@@ -30,6 +30,7 @@ import { exerciseMuscleSnapshot, loadOfWorkouts, MUSCLES, MUSCLE_NAME, muscleWei
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { importHevyData, HevyApiError, HEVY_DEV_SETTINGS, mergeHevyRoutines } from './lib/import-hevy.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, planPrintHTML } from './lib/plan-share.js'
+import { looksLikeMealFile } from './lib/meal-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { exerciseHistory } from './lib/exercise-history.js'
 import { policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS, weightIncrement } from './lib/progression.js'
@@ -1914,6 +1915,9 @@ export function importPlanFile(f, onRead) {
   if (!f) return
   const rd = new FileReader()
   rd.onload = () => {
+    // A meal-plan file picked in the training-plan import (fork feature): open the meal import
+    // instead of refusing it. Loaded lazily, because MealSheets imports this file.
+    if (looksLikeMealFile(rd.result)) { onRead?.(); import('./components/MealSheets.jsx').then(m => m.importMealText(rd.result)); return }
     try { const bundle = parsePlan(rd.result, S().unit || 'kg'); onRead?.(); planImportSheet(bundle) }
     // parsePlan's own refusal is written for people; anything else is not shown raw.
     catch (e) { toast(e?.code === 'not-plan' ? t('Import failed: {0}', e.message) : t('Couldn’t read that file.')) }

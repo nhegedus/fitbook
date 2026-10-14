@@ -18,6 +18,7 @@ import { useListReorder, moved } from '../lib/use-list-reorder.js'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
 import { DEMO } from '../lib/demo.js'
 import Meals from './Meals.jsx'
+import { exportMealPlanFile, importMealFile } from '../components/MealSheets.jsx'
 import { MOBILE } from '../lib/mobile.js'
 import { coachAvailable } from '../lib/coach.js'
 import { queueOf, queueView } from '../lib/queue.js'
@@ -130,6 +131,7 @@ export default function Plan() {
   const coachMode = useStore(s => s.coachLocal?.mode)
   const user = useStore(s => s.user)
   const fileRef = useRef(null)
+  const mealFileRef = useRef(null)
   const [view, setViewState] = useState(readView)
   const setView = v => {
     setViewState(v)
@@ -167,10 +169,12 @@ export default function Plan() {
       <button className="iconbtn" onClick={openMenu} aria-label={t('Plan options')} title={t('Plan options')}><Icon name="share" /></button>
     </div>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
+    <input ref={mealFileRef} type="file" accept="application/json,.json" hidden
+      onChange={ev => { const f = ev.target.files[0]; ev.target.value = ''; importMealFile(f) }} />
     <Segmented className="plan-views" value={view} onChange={setView}
       options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }, { value: 'meals', label: t('Meals') }]} />
     {view === 'meals'
-      ? <Meals S={S} update={update} />
+      ? <Meals S={S} update={update} onImport={() => mealFileRef.current?.click()} onExport={exportMealPlanFile} />
       : view === 'routines'
         ? <Routines S={S} update={update} nav={nav} />
         : <Schedule S={S} update={update} nav={nav} mode={mode} />}
