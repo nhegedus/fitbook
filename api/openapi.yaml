@@ -208,6 +208,8 @@ paths:
         The key is always present for a session, `null` included, so a client that
         caches this answer can tell "no Coach on this instance" from "you were not
         signed in when you asked" and knows whether asking again would change it.
+
+        `food_search` is there unless the server runs with `FOOD_SEARCH=0` (fork feature).
       security: []
       responses:
         '200':
@@ -271,6 +273,56 @@ paths:
                     coach: { enabled: true, provider: compatible, providerLabel: "OpenAI-compatible endpoint", authMode: instance, community: false }
                 passwordLogin: { value: { invite_only: true, allow_guest: false, password_login: true } }
                 media: { value: { invite_only: false, allow_guest: true, media: { imageMB: 2, gifMB: 8, videoMB: 40, videoSec: 60, quotaMB: 200, workouts: true } } }
+
+  /api/food/search:
+    get:
+      tags: [meta]
+      operationId: foodSearch
+      summary: Search Open Food Facts for a food (fork feature)
+      description: >-
+        Asks Open Food Facts' search on the user's behalf for the meal planner and returns
+        values per 100 g. Signed-in users only, 30 searches a minute each; answers are cached
+        for 24 hours. Off (404) when the server runs with `FOOD_SEARCH=0`, and `/api/config`
+        then has no `food_search`. Only the search words leave the server.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 80 }
+        - name: lang
+          in: query
+          required: false
+          schema: { type: string }
+          description: Two-letter language code for product names; default `en`.
+      responses:
+        '200':
+          description: Matching foods; a product without a name is left out.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        brand: { type: string }
+                        barcode: { type: string }
+                        per100:
+                          type: object
+                          properties:
+                            kcal: { type: [number, 'null'] }
+                            protein: { type: [number, 'null'] }
+                            carbs: { type: [number, 'null'] }
+                            fat: { type: [number, 'null'] }
+                        complete: { type: boolean, description: False when any of the four values is unknown. }
+        '400': { description: '`q` is missing, shorter than 2 or longer than 80 characters.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: Food search is switched off on this server. }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: Open Food Facts did not answer in time, or answered with an error. }
 
   /api/me:
     get:

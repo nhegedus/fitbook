@@ -26,6 +26,7 @@ import {
   normalizeEmail, maskEmail
 } from './password.js';
 import { createBackoff, createWindow } from './rate-limit.js';
+import { createFoodSearch } from './food-search.js';
 import {
   listPasskeys, addPasskeyRecord, renamePasskeyRecord, removePasskeyRecord, passkeyRemovalRefused, MAX_PASSKEYS
 } from './passkeys-store.js';
@@ -898,13 +899,18 @@ if (AUDIT_ON) {
 // the whole instance: one client can pause *password* sign-in for everybody for a while, and the
 // per-name pause is what still protects each password.
 const AUTH_BURST = createWindow({ max: 60, windowMs: 60000 });
+// Meal plans' food search (fork feature, docs/NUTRITION.md): on unless FOOD_SEARCH=0. Its own
+// budget, per user, so a search box used quickly can never spend the sign-in budget.
+const FOOD_SEARCH_ON = process.env.FOOD_SEARCH !== '0';
+const FOOD = createFoodSearch({ url: process.env.FOOD_SEARCH_URL || undefined, origin: ORIGIN });
+const FOOD_BURST = createWindow({ max: 30, windowMs: 60000 });
 const ADDR_FAILS = createBackoff({ free: 20, baseMs: 30000, maxMs: 15 * 60000, forgetMs: 3600000 });
 const ACCOUNT_FAILS = createBackoff({
   free: 5, baseMs: 60000, maxMs: 3600000, forgetMs: 24 * 3600000,
   // At most one per profile with a password, so this cannot grow without bound.
   keep: k => k.startsWith('acct:') && hasPassword(db.users.find(u => u.id === k.slice(5)))
 });
-setInterval(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(); }, 60000).unref();
+setInterval(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(); FOOD_BURST.sweep(); }, 60000).unref();
 
 // Route -> the kind of failure it can count. Every route listed here also spends the burst
 // budget; `null` spends only that.
@@ -1836,6 +1842,19 @@ const mediaRoutes = {
 /* ---------- routes ---------- */
 const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true, users: db.users.length }),
+  'GET /api/food/search': async (req, res) => {
+    if (!FOOD_SEARCH_ON) return json(res, 404, { error: 'not found' });
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const p = new URL(req.url, 'http://x').searchParams;
+    const q = (p.get('q') || '').trim();
+    if (q.length < 2 || q.length > 80) return json(res, 400, { error: 'q must be 2 to 80 characters' });
+    const lang = /^[a-z]{2}/.test(p.get('lang') || '') ? p.get('lang').slice(0, 2) : 'en';
+    const wait = FOOD_BURST.take(user.id);
+    if (wait) return json(res, 429, { error: 'too many searches' }, { 'Retry-After': String(wait) });
+    const r = await FOOD.search(q, lang);
+    json(res, r.status, r.body);
+  },
 
   // Public config the login screen needs before anyone is signed in. `coach` is absent unless
   // the instance has both switched the Coach on and successfully connected a provider — the
@@ -1865,6 +1884,8 @@ const routes = {
       // Public like the two flags above: the caps are not a secret, and the absence of the
       // block is how the app knows this server does not take photos and videos at all.
       ...(MEDIA_ON ? { media: mediaConfig(MEDIA_LIMITS) } : {}),
+      // Public like media: its absence is how the app knows to offer manual entry only.
+      ...(FOOD_SEARCH_ON ? { food_search: true } : {}),
       ...(readSession(req) ? { coach: coachConfig.publicConfig() } : {})
     });
   },
