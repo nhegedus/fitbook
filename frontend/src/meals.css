@@ -1,0 +1,27 @@
+/* frontend/src/meals.css — the Meals view of Plan and its sheets (fork feature, docs/NUTRITION.md) */
+.meals{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ml-plans,.ml-days{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.ml-week{display:flex;align-items:center;gap:8px}
+.ml-week .grow{flex:1;text-align:center}
+.ml-day{display:flex;flex-direction:column;align-items:center;min-width:44px;padding:6px 4px;border-radius:12px;background:var(--surface-2);border:0;color:inherit}
+.ml-day.on{background:var(--acc);color:var(--on-acc)}
+.ml-day .dt{font-size:10px;opacity:.75;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-sum{display:grid;gap:8px}
+.ml-row{display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;font-size:14px}
+.ml-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.ml-bar>i{display:block;height:100%;background:currentColor;opacity:.4}
+.ml-row.ok .ml-bar>i{background:var(--green);opacity:1}
+.ml-row.under .ml-bar>i{background:var(--orange);opacity:1}
+.ml-row.over .ml-bar>i{background:var(--red);opacity:1}
+.ml-meal-h{display:flex;align-items:baseline;gap:8px}
+.ml-meal-h .grow{flex:1;font-weight:600}
+.ml-item{display:flex;gap:8px;padding:8px 0;border-top:1px solid rgba(127,127,127,.2)}
+.ml-item .grow{flex:1}
+.ml-insert{align-self:center;border:0;background:none;color:var(--acc);font-size:20px;line-height:1;padding:0 12px}
+.ml-note{font-size:13px}
+.food-form{display:flex;flex-direction:column;gap:10px}
+.ff-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center}
+.ff-warn{color:var(--orange)}
+.fp-list{max-height:40vh;overflow-y:auto}
+.fp-res{display:flex;gap:8px;padding:8px 0;border-top:1px solid rgba(127,127,127,.2)}
+.fp-res .grow{flex:1}
