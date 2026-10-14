@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
-import { DAYS, fmtDate, weekStartOf } from '../lib/format.js'
+import { DAYS, fmtDate, weekStartOf, todayISO } from '../lib/format.js'
 import { Button, TextField, NumberField, Switch, Segmented } from './ui.jsx'
 import { menuSheet, confirmSheet } from '../sheets.jsx'
 import { FoodForm, editNutrition } from './FoodPicker.jsx'
@@ -14,7 +14,7 @@ import {
   updateFood, deleteFood, foodUsage,
 } from '../lib/nutrition-plans.js'
 import { macroKcal, roundKcal } from '../lib/nutrition.js'
-import { phaseDates } from '../lib/nutrition-calendar.js'
+import { phaseDates, phaseFor } from '../lib/nutrition-calendar.js'
 
 const open = (render, opts) => useUI.getState().openSheet(render, opts)
 const useN = () => useStore(s => s.S.nutrition)
@@ -62,6 +62,7 @@ function PhasesSheet({ planId }) {
   const plan = n.plans.find(p => p.id === planId)
   if (!plan) return null
   const dates = phaseDates(plan, ws)
+  const currentId = phaseFor(plan, todayISO(), ws).phase?.id
   const last = plan.phases.length - 1
   return <div className="food-form">
     <h3>{t('Phases')}</h3>
@@ -72,6 +73,7 @@ function PhasesSheet({ planId }) {
       return <div key={p.id} className="card">
         <div className="ml-meal-h">
           <span className="grow" onClick={() => nameSheet({ title: t('Rename phase'), value: p.name, onSave: v => editNutrition(x => renamePhase(x, ref, v)) })}>{p.name}</span>
+          {p.id === currentId && <span className="muted small">{t('Current')}</span>}
           <span className="muted small">{fmtDate(dates[i].from)} – {dates[i].to ? fmtDate(dates[i].to) : t('no end')}</span>
         </div>
         {i === last && <label className="ff-row"><span>{t('Repeat every week')}</span>

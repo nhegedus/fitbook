@@ -52,6 +52,7 @@ export default function Meals({ S, update, onImport, onExport }) {
       { items: [
         { icon: 'plus', label: t('New meal plan'), onClick: newPlan },
         { icon: 'pencil', label: t('Rename'), onClick: () => nameSheet({ title: t('Rename meal plan'), value: plan.name, onSave: v => editNutrition(x => renamePlan(x, plan.id, v)) }) },
+        { icon: 'copy', label: t('Duplicate'), onClick: () => nameSheet({ title: t('Name the plan'), value: t('Copy of {0}', plan.name), onSave: v => setPlanId(editNutrition(x => addPlan(x, { name: v, copyFrom: plan.id, today, ws }))) }) },
         plan.id !== n.mine && { icon: 'trash', label: t('Delete'), danger: true, onClick: () => confirmSheet({ title: t('Delete “{0}”?', plan.name), danger: true, confirmText: t('Delete'), onConfirm: () => { editNutrition(x => deletePlan(x, plan.id)); setPlanId(null) } }) },
       ] },
       { items: [
