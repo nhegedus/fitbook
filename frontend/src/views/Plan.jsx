@@ -17,6 +17,7 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import { useListReorder, moved } from '../lib/use-list-reorder.js'
 import { glyphOf, DEFAULT_GLYPH } from '../lib/glyphs.js'
 import { DEMO } from '../lib/demo.js'
+import Meals from './Meals.jsx'
 import { MOBILE } from '../lib/mobile.js'
 import { coachAvailable } from '../lib/coach.js'
 import { queueOf, queueView } from '../lib/queue.js'
@@ -27,12 +28,12 @@ import {
   chooseRotation, chooseFixedWeek,
 } from '../lib/rotation.js'
 
-// Plan has two views (v1.3.11): Schedule (how you train, and when) and Routines (what you
-// train). The last one you looked at comes back: a per-device convenience, never synced, so it
-// lives in this browser's storage and not in S.
+// Plan has three views (v1.3.11): Schedule (how you train, and when), Routines (what you
+// train) and Meals (what you eat, fork feature). The last one you looked at comes back: a
+// per-device convenience, never synced, so it lives in this browser's storage and not in S.
 export const PLAN_VIEW_KEY = 'gym_plan_view'
 const readView = () => {
-  try { return localStorage.getItem(PLAN_VIEW_KEY) === 'routines' ? 'routines' : 'schedule' } catch { return 'schedule' }
+  try { const v = localStorage.getItem(PLAN_VIEW_KEY); return v === 'routines' || v === 'meals' ? v : 'schedule' } catch { return 'schedule' }
 }
 
 /* Undo for Plan's two removals (v1.3.11). Both go through the store's normal update, so sync
@@ -167,10 +168,12 @@ export default function Plan() {
     </div>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
     <Segmented className="plan-views" value={view} onChange={setView}
-      options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }]} />
-    {view === 'routines'
-      ? <Routines S={S} update={update} nav={nav} />
-      : <Schedule S={S} update={update} nav={nav} mode={mode} />}
+      options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }, { value: 'meals', label: t('Meals') }]} />
+    {view === 'meals'
+      ? <Meals S={S} update={update} />
+      : view === 'routines'
+        ? <Routines S={S} update={update} nav={nav} />
+        : <Schedule S={S} update={update} nav={nav} mode={mode} />}
   </div>
 }
 
