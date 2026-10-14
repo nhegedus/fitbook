@@ -7,7 +7,8 @@ import { DAYS, DAYN, weekOrder, weekStartOf, todayISO, fmtDate } from '../lib/fo
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 import { menuSheet, confirmSheet } from '../sheets.jsx'
-import { foodPickerSheet, gramsSheet, editNutrition } from '../components/FoodPicker.jsx'
+import { foodPickerSheet, gramsSheet, editNutrition, editCapped } from '../components/FoodPicker.jsx'
+import { tappable } from '../lib/use-sheet-keyboard.js'
 import { nameSheet, targetsSheet, phasesSheet, dayTypesSheet, myFoodsSheet } from '../components/MealSheets.jsx'
 import {
   ensureMine, addPlan, renamePlan, deletePlan, assignDay, makeDaySeparate,
@@ -51,7 +52,7 @@ export default function Meals({ S, onImport, onExport }) {
     title: t('New meal plan'),
     items: [{ label: t('Empty plan'), from: null }, ...n.plans.map(p => ({ label: t('Copy of {0}', p.name), from: p.id }))].map(o => ({
       label: o.label,
-      onClick: () => nameSheet({ title: t('Name the plan'), value: '', onSave: v => setPlanId(editNutrition(x => addPlan(x, { name: v, copyFrom: o.from, today, ws }))) }),
+      onClick: () => nameSheet({ title: t('Name the plan'), value: '', onSave: v => setPlanId(editCapped(x => addPlan(x, { name: v, copyFrom: o.from, today, ws }))) }),
     })),
   })
   const planMenu = () => menuSheet({
@@ -60,7 +61,7 @@ export default function Meals({ S, onImport, onExport }) {
       { items: [
         { icon: 'plus', label: t('New meal plan'), onClick: newPlan },
         { icon: 'pencil', label: t('Rename'), onClick: () => nameSheet({ title: t('Rename meal plan'), value: plan.name, onSave: v => editNutrition(x => renamePlan(x, plan.id, v)) }) },
-        { icon: 'copy', label: t('Duplicate'), onClick: () => nameSheet({ title: t('Name the plan'), value: t('Copy of {0}', plan.name), onSave: v => setPlanId(editNutrition(x => addPlan(x, { name: v, copyFrom: plan.id, today, ws }))) }) },
+        { icon: 'copy', label: t('Duplicate'), onClick: () => nameSheet({ title: t('Name the plan'), value: t('Copy of {0}', plan.name), onSave: v => setPlanId(editCapped(x => addPlan(x, { name: v, copyFrom: plan.id, today, ws }))) }) },
         plan.id !== n.mine && { icon: 'trash', label: t('Delete'), danger: true, onClick: () => confirmSheet({ title: t('Delete “{0}”?', plan.name), danger: true, confirmText: t('Delete'), onConfirm: () => { editNutrition(x => deletePlan(x, plan.id)); setPlanId(null) } }) },
       ] },
       { items: [
@@ -78,11 +79,11 @@ export default function Meals({ S, onImport, onExport }) {
     title: t('{0} uses', t(DAYN[weekday])),
     items: [
       ...day.phase.dayTypes.map(dt => ({ label: dt.name, on: dt.id === ref.dayTypeId, onClick: () => editNutrition(x => assignDay(x, ref, weekday, dt.id)) })),
-      { icon: 'copy', label: t('Make this day separate'), sub: t('Its own copy, so changes affect only {0}', t(DAYN[weekday])), onClick: () => editNutrition(x => makeDaySeparate(x, ref, weekday, t(DAYN[weekday]))) },
+      { icon: 'copy', label: t('Make this day separate'), sub: t('Its own copy, so changes affect only {0}', t(DAYN[weekday])), onClick: () => editCapped(x => makeDaySeparate(x, ref, weekday, t(DAYN[weekday]))) },
       { icon: 'list', label: t('Edit day types'), onClick: () => dayTypesSheet({ planId: plan.id, phaseId: ref.phaseId }) },
     ],
   })
-  const addMealAt = index => nameSheet({ title: t('New meal'), value: t('Snack'), onSave: v => editNutrition(x => insertMeal(x, ref, index, v)) })
+  const addMealAt = index => nameSheet({ title: t('New meal'), value: t('Snack'), onSave: v => editCapped(x => insertMeal(x, ref, index, v)) })
   const mealMenu = (m, i, count) => {
     const mref = { ...ref, mealId: m.id }
     menuSheet({
@@ -92,7 +93,7 @@ export default function Meals({ S, onImport, onExport }) {
         i > 0 && { icon: 'arrowUp', label: t('Move up'), onClick: () => editNutrition(x => moveMeal(x, mref, -1)) },
         i < count - 1 && { icon: 'arrowDown', label: t('Move down'), onClick: () => editNutrition(x => moveMeal(x, mref, 1)) },
         { icon: 'trash', label: t('Delete meal'), danger: true, onClick: () => m.items.length
-          ? confirmSheet({ title: t('Delete “{0}”?', m.name), message: t('Its {0} foods go with it.', m.items.length), danger: true, confirmText: t('Delete'), onConfirm: () => editNutrition(x => deleteMeal(x, mref)) })
+          ? confirmSheet({ title: t('Delete “{0}”?', m.name), message: m.items.length === 1 ? t('Its one food goes with it.') : t('Its {0} foods go with it.', m.items.length), danger: true, confirmText: t('Delete'), onConfirm: () => editNutrition(x => deleteMeal(x, mref)) })
           : editNutrition(x => deleteMeal(x, mref)) },
       ],
     })
@@ -133,7 +134,7 @@ export default function Meals({ S, onImport, onExport }) {
       <Summary dayType={day.dayType} foods={foods} onTargets={() => targetsSheet(ref)} />
       {day.dayType.meals.map((m, i) => <MealCard key={m.id} meal={m} foods={foods}
         onInsertBefore={() => addMealAt(i)} onMenu={() => mealMenu(m, i, day.dayType.meals.length)}
-        onAdd={() => foodPickerSheet({ onPicked: (foodId, g) => editNutrition(x => addItem(x, { ...ref, mealId: m.id }, foodId, g)) })}
+        onAdd={() => foodPickerSheet({ onPicked: (foodId, g) => editCapped(x => addItem(x, { ...ref, mealId: m.id }, foodId, g)) })}
         onItem={it => gramsSheet({
           foodId: it.foodId, grams: it.grams,
           onSave: g => editNutrition(x => setItemGrams(x, { ...ref, mealId: m.id }, it.id, g)),
@@ -177,7 +178,7 @@ function MealCard({ meal, foods, onAdd, onItem, onMenu, onInsertBefore }) {
       {meal.items.map(it => {
         const f = foods.get(it.foodId)
         const r = itemTotals(f, it.grams)
-        return <div key={it.id} className="ml-item" onClick={() => onItem(it)}>
+        return <div key={it.id} className="ml-item" {...tappable(() => onItem(it))}>
           <span className="grow">{f?.name || t('Deleted food')}</span>
           <span className="muted">{it.grams} g</span>
           <span className="muted">{r.kcal == null ? '?' : roundKcal(r.kcal)} kcal</span>

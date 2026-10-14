@@ -11,10 +11,19 @@ import { Button, TextField, NumberField } from './ui.jsx'
 import { ensureNutrition, addFood, clampGrams } from '../lib/nutrition-plans.js'
 import { macroKcal, kcalMismatch, roundKcal, itemTotals } from '../lib/nutrition.js'
 import { foodSearchAvailable, searchFoods } from '../lib/food-search.js'
+import { tappable } from '../lib/use-sheet-keyboard.js'
 
 export function editNutrition(fn) {
   let out
   useStore.getState().update(s => { out = fn(ensureNutrition(s)) })
+  return out
+}
+
+// Edits that add something return null at a cap (lib/nutrition-plans.js LIMITS); say so instead
+// of doing nothing.
+export function editCapped(fn) {
+  const out = editNutrition(fn)
+  if (out == null) useUI.getState().toast(t('That’s the limit for this plan.'))
   return out
 }
 
@@ -47,7 +56,8 @@ function GramsStep({ foodId, grams: start = 100, onSave, onBack, onRemove, saveT
     <h3>{food?.name || t('Food')}</h3>
     <label className="ff-row"><span>{t('Amount (g)')}</span><NumberField decimal={false} value={g} onChange={setG} autoFocus /></label>
     <div className="muted small">{t('{0} kcal · {1} g protein', roundKcal(tot.kcal) ?? '?', tot.protein == null ? '?' : Math.round(tot.protein))}</div>
-    <Button variant="primary" onClick={() => onSave(clampGrams(g))}>{saveText || t('Add')}</Button>
+    {/* A cleared field reads 0; saving that would quietly clamp it to 1 g. */}
+    <Button variant="primary" disabled={!(g >= 1)} onClick={() => onSave(clampGrams(g))}>{saveText || t('Add')}</Button>
     {onRemove && <Button variant="ghost" className="danger" onClick={onRemove}>{t('Remove from meal')}</Button>}
     <Button variant="ghost" className="dim" onClick={onBack}>{t('Cancel')}</Button>
   </div>
@@ -73,6 +83,13 @@ function FoodPicker({ close, onPicked }) {
     catch (e) { setRemote({ state: e?.status === 429 ? 'busy' : 'error', results: [] }) }
   }
 
+  // A product already saved from Open Food Facts is reused, not saved a second time.
+  const pickResult = r => {
+    const twin = r.barcode && foods.find(f => f.barcode && f.barcode === String(r.barcode).slice(0, 32))
+    if (twin) return setStep({ kind: 'grams', foodId: twin.id })
+    setStep({ kind: 'form', initial: { name: r.brand ? `${r.name} (${r.brand})` : r.name, ...r.per100, source: 'off', barcode: r.barcode } })
+  }
+
   if (step.kind === 'form') return <>
     <h3>{step.initial?.name ? t('Check the values') : t('Add a food')}</h3>
     <FoodForm initial={step.initial} onCancel={() => setStep({ kind: 'list' })}
@@ -85,7 +102,7 @@ function FoodPicker({ close, onPicked }) {
     <h3>{t('Add food')}</h3>
     <TextField value={q} placeholder={t('Search your foods')} onChange={e => setQ(e.target.value)} />
     <div className="fp-list">
-      {mine.map(f => <div key={f.id} className="fp-res" onClick={() => setStep({ kind: 'grams', foodId: f.id })}>
+      {mine.map(f => <div key={f.id} className="fp-res" {...tappable(() => setStep({ kind: 'grams', foodId: f.id }))}>
         <div className="grow">{f.name}</div>
         <div className="muted small">{f.kcal == null ? '?' : roundKcal(f.kcal)} kcal</div>
       </div>)}
@@ -99,8 +116,7 @@ function FoodPicker({ close, onPicked }) {
       {remote.state === 'busy' && <div className="small ff-warn">{t('Too many searches. Try again in a minute.')}</div>}
       {remote.state === 'done' && !remote.results.length && <div className="muted small">{t('Nothing found.')}</div>}
       <div className="fp-list">
-        {remote.results.map((r, i) => <div key={i} className="fp-res"
-          onClick={() => setStep({ kind: 'form', initial: { name: r.brand ? `${r.name} (${r.brand})` : r.name, ...r.per100, source: 'off', barcode: r.barcode } })}>
+        {remote.results.map((r, i) => <div key={i} className="fp-res" {...tappable(() => pickResult(r))}>
           <div className="grow">{r.name}{r.brand && <div className="muted small">{r.brand}</div>}</div>
           <div className="muted small">{r.per100.kcal == null ? '?' : roundKcal(r.per100.kcal)} kcal · {r.per100.protein ?? '?'} P{!r.complete && ' · ' + t('incomplete')}</div>
         </div>)}

@@ -25,11 +25,12 @@ it does not log what was eaten.
 copy of another plan. ⋯ → Export meal plan saves the selected plan as `meal-plan-<name>.json`:
 the plan and the foods it uses, never workouts, weigh-ins or settings. The client opens
 Plan → Meals → ⋯ → Import meal plan, picks when it starts, and replaces their plan or saves it as
-a new one. A meal-plan file picked in the training-plan import is recognised and handed over.
+a new one. A meal-plan file picked in the training-plan import (Plan's share icon) is recognised
+and handed over.
 
 ## Food search and privacy
 
-Searches go from your server to Open Food Facts (`search.openfoodfacts.org`): only the words
+Searches go from your server to Open Food Facts (`search.openfoodfacts.org` by default): only the words
 typed and the app language, never who typed them. Signed-in users only, 30 searches a minute
 each, answers cached for a day. Phones in local mode (no server) have manual entry only.
 

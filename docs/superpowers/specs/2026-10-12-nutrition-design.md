@@ -231,8 +231,11 @@ File format, one plan per file, with all its phases:
 value through `edited['nutrition']` (`frontend/src/lib/sync-merge.js` `stampEdits` / `applyEdits`),
 and `api/sync-stamps.js` `keepUnknown` puts it back when an older, non-stamping app saves without
 it. Known trade-off: two devices editing different parts before syncing keep only the later save.
-No sync code changes; tests pin the behaviour so an upstream change to it is noticed. The whole key
-stays far below the 5 MB state limit at the caps in §3.
+No sync code changes; tests pin the behaviour so an upstream change to it is noticed. The caps in
+§3 alone do not bound the key (one plan at 12 × 14 × 12 × 40 items is about the 5 MB state limit),
+so a plan holds at most 2,000 items (`LIMITS.planItems`, enforced by `addItem` and by import), an
+import keeps at most 2,000 foods (`LIMITS.foods`, only the ones its items use), and an import whose
+parsed plan and foods exceed 500,000 characters is refused.
 
 ## 9. Tests
 

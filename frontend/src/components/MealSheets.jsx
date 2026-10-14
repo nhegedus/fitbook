@@ -7,7 +7,8 @@ import { t } from '../lib/i18n.js'
 import { DAYS, fmtDate, weekStartOf, todayISO } from '../lib/format.js'
 import { Button, TextField, NumberField, Switch, Segmented } from './ui.jsx'
 import { menuSheet, confirmSheet } from '../sheets.jsx'
-import { FoodForm, editNutrition } from './FoodPicker.jsx'
+import { FoodForm, editNutrition, editCapped } from './FoodPicker.jsx'
+import { tappable } from '../lib/use-sheet-keyboard.js'
 import {
   at, setTarget, applyTargetToAll, addPhase, renamePhase, setPhaseWeeks, movePhase, deletePhase,
   setPlanStart, setAfterLast, addDayType, renameDayType, deleteDayType, dayTypeUsage, useAsDefaultMeals,
@@ -74,7 +75,7 @@ function PhasesSheet({ planId }) {
       const ref = { planId, phaseId: p.id }
       return <div key={p.id} className="card">
         <div className="ml-meal-h">
-          <span className="grow" onClick={() => nameSheet({ title: t('Rename phase'), value: p.name, onSave: v => editNutrition(x => renamePhase(x, ref, v)) })}>{p.name}</span>
+          <span className="grow" {...tappable(() => nameSheet({ title: t('Rename phase'), value: p.name, onSave: v => editNutrition(x => renamePhase(x, ref, v)) }))}>{p.name}</span>
           {p.id === currentId && <span className="muted small">{t('Current')}</span>}
           <span className="muted small">{fmtDate(dates[i].from)} – {dates[i].to ? fmtDate(dates[i].to) : t('no end')}</span>
         </div>
@@ -85,13 +86,13 @@ function PhasesSheet({ planId }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Button size="sm" variant="plain" disabled={i === 0} onClick={() => editNutrition(x => movePhase(x, ref, -1))}>{t('Up')}</Button>
           <Button size="sm" variant="plain" disabled={i === last} onClick={() => editNutrition(x => movePhase(x, ref, 1))}>{t('Down')}</Button>
-          <Button size="sm" variant="plain" onClick={() => editNutrition(x => addPhase(x, planId, { copyFrom: p.id }))}>{t('Duplicate')}</Button>
+          <Button size="sm" variant="plain" onClick={() => editCapped(x => addPhase(x, planId, { copyFrom: p.id }))}>{t('Duplicate')}</Button>
           <Button size="sm" variant="plain" className="danger" disabled={plan.phases.length < 2}
             onClick={() => confirmSheet({ title: t('Delete “{0}”?', p.name), danger: true, confirmText: t('Delete'), onConfirm: () => editNutrition(x => deletePhase(x, ref)) })}>{t('Delete')}</Button>
         </div>
       </div>
     })}
-    <Button variant="tinted" onClick={() => editNutrition(x => addPhase(x, planId, {}))}>{t('Add phase')}</Button>
+    <Button variant="tinted" onClick={() => editCapped(x => addPhase(x, planId, {}))}>{t('Add phase')}</Button>
     {plan.phases[last].weeks != null && <>
       <div className="muted small">{t('After the last phase')}</div>
       <Segmented value={plan.afterLast} onChange={v => editNutrition(x => setAfterLast(x, planId, v))}
@@ -114,11 +115,11 @@ function DayTypesSheet({ refs }) {
       const days = dayTypeUsage(phase, dt.id)
       return <div key={dt.id} className="card">
         <div className="ml-meal-h">
-          <span className="grow" onClick={() => nameSheet({ title: t('Rename day type'), value: dt.name, onSave: v => editNutrition(x => renameDayType(x, ref, v)) })}>{dt.name}</span>
+          <span className="grow" {...tappable(() => nameSheet({ title: t('Rename day type'), value: dt.name, onSave: v => editNutrition(x => renameDayType(x, ref, v)) }))}>{dt.name}</span>
           <span className="muted small">{days.length ? days.map(d => t(DAYS[d])).join(' ') : t('not used')}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <Button size="sm" variant="plain" onClick={() => editNutrition(x => addDayType(x, refs, { copyFrom: dt.id }))}>{t('Duplicate')}</Button>
+          <Button size="sm" variant="plain" onClick={() => editCapped(x => addDayType(x, refs, { copyFrom: dt.id }))}>{t('Duplicate')}</Button>
           <Button size="sm" variant="plain" onClick={() => { editNutrition(x => useAsDefaultMeals(x, ref)); useUI.getState().toast(t('New day types will start with these meals.')) }}>{t('Use as my default meals')}</Button>
           <Button size="sm" variant="plain" className="danger" disabled={phase.dayTypes.length < 2} onClick={() => {
             const others = phase.dayTypes.filter(d => d.id !== dt.id)
@@ -131,7 +132,7 @@ function DayTypesSheet({ refs }) {
         </div>
       </div>
     })}
-    <Button variant="tinted" onClick={() => nameSheet({ title: t('New day type'), value: t('Rest day'), onSave: v => editNutrition(x => addDayType(x, refs, { name: v })) })}>{t('Add day type')}</Button>
+    <Button variant="tinted" onClick={() => nameSheet({ title: t('New day type'), value: t('Rest day'), onSave: v => editCapped(x => addDayType(x, refs, { name: v })) })}>{t('Add day type')}</Button>
   </div>
 }
 export const dayTypesSheet = refs => open(() => <DayTypesSheet refs={refs} />)
@@ -154,10 +155,10 @@ function MyFoodsSheet() {
     {foods.map(f => {
       const used = foodUsage(n, f.id)
       return <div key={f.id} className="fp-res">
-        <div className="grow" onClick={() => setEditing(f.id)}>{f.name}
+        <div className="grow" {...tappable(() => setEditing(f.id))}>{f.name}
           <div className="muted small">{f.kcal ?? '?'} kcal · {f.protein ?? '?'} P · {f.carbs ?? '?'} C · {f.fat ?? '?'} F {t('per 100 g')}</div></div>
         <Button size="sm" variant="plain" className="danger" onClick={() => used
-          ? confirmSheet({ title: t('Delete “{0}”?', f.name), message: t('It is used {0} times and will be removed from those meals.', used), danger: true, confirmText: t('Delete'), onConfirm: () => editNutrition(x => deleteFood(x, f.id)) })
+          ? confirmSheet({ title: t('Delete “{0}”?', f.name), message: used === 1 ? t('It is used once and will be removed from that meal.') : t('It is used {0} times and will be removed from those meals.', used), danger: true, confirmText: t('Delete'), onConfirm: () => editNutrition(x => deleteFood(x, f.id)) })
           : editNutrition(x => deleteFood(x, f.id))}>{t('Delete')}</Button>
       </div>
     })}
