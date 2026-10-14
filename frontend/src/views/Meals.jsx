@@ -1,7 +1,7 @@
 // Plan → Meals (fork feature, docs/NUTRITION.md). Shows one week of the selected meal plan: the
 // phase and day type each date falls on, each day's meals, and the day's totals against its
 // day type's targets. All edits go through lib/nutrition-plans.js.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { t } from '../lib/i18n.js'
 import { DAYS, DAYN, weekOrder, weekStartOf, todayISO, fmtDate } from '../lib/format.js'
 import { Button } from '../components/ui.jsx'
@@ -10,7 +10,7 @@ import { menuSheet, confirmSheet } from '../sheets.jsx'
 import { foodPickerSheet, gramsSheet, editNutrition } from '../components/FoodPicker.jsx'
 import { nameSheet, targetsSheet, phasesSheet, dayTypesSheet, myFoodsSheet } from '../components/MealSheets.jsx'
 import {
-  ensureNutrition, ensureMine, addPlan, renamePlan, deletePlan, assignDay, makeDaySeparate,
+  ensureMine, addPlan, renamePlan, deletePlan, assignDay, makeDaySeparate,
   insertMeal, renameMeal, moveMeal, deleteMeal, addItem, setItemGrams, removeItem,
 } from '../lib/nutrition-plans.js'
 import { foodIndex, itemTotals, mealTotals, dayTotals, dayStatus, roundKcal, roundGrams, MACROS } from '../lib/nutrition.js'
@@ -19,7 +19,7 @@ import '../meals.css'
 
 const LABEL = () => ({ kcal: t('kcal'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat') })
 
-export default function Meals({ S, update, onImport, onExport }) {
+export default function Meals({ S, onImport, onExport }) {
   const ws = weekStartOf(S)
   const today = todayISO()
   const n = S.nutrition
@@ -28,8 +28,16 @@ export default function Meals({ S, update, onImport, onExport }) {
   const [weekday, setWeekday] = useState(() => weekdayOf(today))
   const foods = useMemo(() => foodIndex(n?.foods), [n?.foods])
   const ready = !!(n?.mine && n.plans?.some(p => p.id === n.mine))
-  useEffect(() => { if (!ready) update(s => { ensureMine(ensureNutrition(s), today, ws) }) }, [ready])
-  if (!ready) return null
+  // Never create the plan on view: any write stamps nutrition as edited, and sync keeps the newest
+  // whole nutrition key, so an empty plan made by merely looking (before a pull) would replace
+  // the plans and foods on every other device. Starting one is the user's choice.
+  if (!ready) return <div className="meals">
+    <div className="card">
+      <p>{t('Plan what you eat across the week, with calorie and macro targets.')}</p>
+      <Button variant="primary" onClick={() => editNutrition(x => ensureMine(x, today, ws))}>{t('Start my meal plan')}</Button>
+      <Button variant="tinted" onClick={() => onImport?.()}>{t('Import meal plan')}</Button>
+    </div>
+  </div>
 
   const plan = n.plans.find(p => p.id === planId) || n.plans.find(p => p.id === n.mine)
   const order = weekOrder(ws)

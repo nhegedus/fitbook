@@ -174,7 +174,7 @@ export default function Plan() {
     <Segmented className="plan-views" value={view} onChange={setView}
       options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }, { value: 'meals', label: t('Meals') }]} />
     {view === 'meals'
-      ? <Meals S={S} update={update} onImport={() => mealFileRef.current?.click()} onExport={exportMealPlanFile} />
+      ? <Meals S={S} onImport={() => mealFileRef.current?.click()} onExport={exportMealPlanFile} />
       : view === 'routines'
         ? <Routines S={S} update={update} nav={nav} />
         : <Schedule S={S} update={update} nav={nav} mode={mode} />}
