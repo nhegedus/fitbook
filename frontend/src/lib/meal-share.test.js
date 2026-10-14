@@ -1,7 +1,7 @@
 // frontend/src/lib/meal-share.test.js
 import { describe, it, expect } from 'vitest'
 import { MEAL_FMT, buildMealBundle, mealFileName, looksLikeMealFile, parseMealPlan, importMealPlan } from './meal-share.js'
-import { ensureNutrition, ensureMine, addFood, addItem, addPhase, at, setTarget } from './nutrition-plans.js'
+import { ensureNutrition, ensureMine, addFood, addItem, addPhase, at, setTarget, LIMITS } from './nutrition-plans.js'
 
 const TODAY = '2026-10-15', MON = 1
 
@@ -73,6 +73,54 @@ describe('detect and parse', () => {
     expect(Object.values(p.phases[0].week)).toEqual(Array(7).fill('d1'))
     expect(p.phases[0].dayTypes[0].meals[0].items).toEqual([{ id: expect.any(String), foodId: 'f1', grams: 5000 }])
     expect(p.foods[0].kcal).toBe(900)
+  })
+})
+
+describe('size limits', () => {
+  // One plan at the structural caps (12 × 14 × 12 × 40 items) is ~5 MB, the server's whole body
+  // limit, so a file is bounded by items per plan, foods and its parsed size instead.
+  const food = i => ({ id: 'f' + i, name: 'Food ' + i, kcal: 100, protein: 1, carbs: 1, fat: 1 })
+  const file = ({ foods, phases }) => JSON.stringify({ opengym_meals: 2, name: 'Big', phases, foods })
+  const dayType = (id, meals) => ({ id, name: id, meals })
+
+  it('keeps only the foods the plan uses', () => {
+    const foods = [food(1), ...Array.from({ length: 50 }, (_, i) => food(100 + i))]
+    const p = parseMealPlan(file({ foods, phases: [{ name: 'A', weeks: null, dayTypes: [dayType('d', [{ name: 'M', items: [{ foodId: 'f1', grams: 100 }] }])] }] }))
+    expect(p.foods.map(f => f.id)).toEqual(['f1'])
+    expect(p.counts.foods).toBe(1)
+  })
+  it('caps the foods at LIMITS.foods and drops items that point past it', () => {
+    expect(LIMITS.foods).toBe(2000)
+    const foods = Array.from({ length: 2100 }, (_, i) => food(i))
+    const items = i => Array.from({ length: 40 }, (_, k) => ({ foodId: 'f' + (i * 40 + k), grams: 100 }))
+    // 6 day types × 12 meals × 40 items = 2,880 items over 2,100 distinct foods: past both caps.
+    const dts = Array.from({ length: 6 }, (_, d) => dayType('d' + d, Array.from({ length: 12 }, (_, m) => ({ name: 'M', items: items((d * 12 + m) % 53) }))))
+    const p = parseMealPlan(file({ foods, phases: [{ name: 'A', weeks: null, dayTypes: dts }] }))
+    // One plan per file and one food per item at most, so the foods cap and the items cap meet.
+    expect(p.foods).toHaveLength(2000)
+    const ids = new Set(p.foods.map(f => f.id))
+    for (const dt of p.phases[0].dayTypes) for (const m of dt.meals) for (const it of m.items) expect(ids.has(it.foodId)).toBe(true)
+  })
+  it('stops adding items once the plan holds LIMITS.planItems, in file order', () => {
+    expect(LIMITS.planItems).toBe(2000)
+    const foods = [food(1)]
+    const meal = { name: 'M', items: Array.from({ length: 40 }, () => ({ foodId: 'f1', grams: 100 })) }
+    const phase = { name: 'P', weeks: 1, dayTypes: Array.from({ length: 14 }, (_, d) => dayType('d' + d, Array(12).fill(meal))) }
+    const p = parseMealPlan(file({ foods, phases: [phase, phase] }))   // 2 × 14 × 12 × 40 = 13,440
+    const perDt = p.phases.flatMap(ph => ph.dayTypes.map(dt => dt.meals.reduce((a, m) => a + m.items.length, 0)))
+    expect(perDt.reduce((a, b) => a + b, 0)).toBe(2000)
+    expect(perDt.slice(0, 4)).toEqual([480, 480, 480, 480])     // the first 2,000 kept, the rest dropped
+    expect(perDt[4]).toBe(80)
+    expect(perDt.slice(5).every(c => c === 0)).toBe(true)
+  })
+  it('refuses a file whose plan is still too large after the caps', () => {
+    const long = 'x'.repeat(60)
+    const foods = Array.from({ length: 2000 }, (_, i) => ({ ...food(i), name: String(i).padEnd(80, 'y') }))
+    let k = 0
+    const meal = () => ({ name: long, items: Array.from({ length: 40 }, () => ({ foodId: 'f' + (k++ % 2000), grams: 100 })) })
+    const phase = i => ({ name: long, weeks: 1, dayTypes: Array.from({ length: 14 }, (_, d) => dayType(`${long}${i}-${d}`, Array.from({ length: 12 }, meal))) })
+    const big = file({ foods, phases: Array.from({ length: 12 }, (_, i) => phase(i)) })
+    expect(() => parseMealPlan(big)).toThrow(expect.objectContaining({ code: 'not-meals', message: 'This meal plan is too large to import.' }))
   })
 })
 

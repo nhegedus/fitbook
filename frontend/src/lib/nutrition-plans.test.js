@@ -6,7 +6,7 @@ import {
   addPhase, renamePhase, setPhaseWeeks, movePhase, deletePhase,
   addDayType, deleteDayType, assignDay, makeDaySeparate, setTarget, applyTargetToAll, dayTypeUsage,
   insertMeal, renameMeal, moveMeal, deleteMeal, useAsDefaultMeals,
-  addItem, setItemGrams, removeItem, addFood, updateFood, foodUsage, deleteFood,
+  addItem, setItemGrams, removeItem, addFood, updateFood, foodUsage, deleteFood, LIMITS,
 } from './nutrition-plans.js'
 
 const TODAY = '2026-10-15', MON = 1
@@ -251,6 +251,19 @@ describe('meals and items', () => {
     expect(at(n, mealRef).meal.items[0].grams).toBe(180)
     removeItem(n, mealRef, item)
     expect(at(n, mealRef).meal.items).toEqual([])
+  })
+  it('refuses an item once the plan holds LIMITS.planItems', () => {
+    const { n, planId } = fresh()
+    const ref = firstRef(n, planId)
+    const f = addFood(n, { name: 'Rice', kcal: 130 })
+    // 14 day types × 4 meals × 40 items = 2,240 slots, so the plan cap is hit before any other.
+    while (at(n, ref).phase.dayTypes.length < LIMITS.dayTypes) addDayType(n, ref, { name: 'D' })
+    const meals = at(n, ref).phase.dayTypes.flatMap(dt => dt.meals.map(m => ({ ...ref, dayTypeId: dt.id, mealId: m.id })))
+    let added = 0
+    for (const m of meals) for (let k = 0; k < LIMITS.items; k++) if (addItem(n, m, f, 100)) added++
+    expect(added).toBe(LIMITS.planItems)
+    expect(foodUsage(n, f)).toBe(LIMITS.planItems)
+    expect(addItem(n, meals.at(-1), f, 100)).toBeNull()
   })
   it('refuses an item for an unknown food', () => {
     const { n, planId } = fresh()

@@ -12,6 +12,9 @@ const WEEKDAYS = ['0', '1', '2', '3', '4', '5', '6']
 const AFTER = new Set(['stay', 'restart', 'end'])
 const fail = (code, message) => Object.assign(new Error(message), { code })
 const clone = o => JSON.parse(JSON.stringify(o))
+// The parsed plan and its foods must stay far below the server's 5 MB state limit, or every later
+// push is refused and workouts stop syncing too.
+const MAX_IMPORT_CHARS = 500000
 
 export function buildMealBundle(n, planId, today) {
   const plan = n.plans.find(p => p.id === planId)
@@ -34,12 +37,28 @@ export function looksLikeMealFile(text) {
   try { const d = JSON.parse(text); return !!d && typeof d === 'object' && d.opengym_meals != null } catch { return false }
 }
 
-function parseDayType(raw, foodIds) {
+// `ctx` carries what the whole plan has used so far: the item count against LIMITS.planItems and
+// the foods kept (in order of first use, at most LIMITS.foods). Items are taken in file order —
+// phases, day types, meals, items — so the same file always keeps the same items.
+function takeItems(list, ctx) {
+  const out = []
+  for (const i of Array.isArray(list) ? list : []) {
+    if (out.length >= LIMITS.items || ctx.items >= LIMITS.planItems) break
+    const food = ctx.fileFoods.get(i?.foodId)
+    if (!food) continue
+    if (!ctx.kept.has(i.foodId)) {
+      if (ctx.kept.size >= LIMITS.foods) continue
+      ctx.kept.set(i.foodId, food)
+    }
+    out.push({ id: uid(), foodId: i.foodId, grams: clampGrams(i.grams) })
+    ctx.items++
+  }
+  return out
+}
+
+function parseDayType(raw, ctx) {
   const meals = (Array.isArray(raw?.meals) ? raw.meals : []).slice(0, LIMITS.meals).map(m => ({
-    id: uid(), name: cleanName(m?.name) || 'Meal',
-    items: (Array.isArray(m?.items) ? m.items : [])
-      .filter(i => foodIds.has(i?.foodId)).slice(0, LIMITS.items)
-      .map(i => ({ id: uid(), foodId: i.foodId, grams: clampGrams(i.grams) })),
+    id: uid(), name: cleanName(m?.name) || 'Meal', items: takeItems(m?.items, ctx),
   }))
   const out = { id: raw?.id != null ? String(raw.id) : uid(), name: cleanName(raw?.name) || 'Day', meals }
   const target = {}
@@ -59,11 +78,16 @@ export function parseMealPlan(raw) {
     throw fail('not-meals', t('This isn’t an openGym meal-plan file.'))
   }
   if (Number(d.opengym_meals) > MEAL_FMT) throw fail('not-meals', t('This meal plan was made by a newer version of openGym.'))
-  const foods = (Array.isArray(d.foods) ? d.foods : []).map(f => cleanFood({ ...f, source: 'import' })).filter(Boolean)
-  const foodIds = new Set(foods.map(f => f.id))
+  // Only foods some kept item uses come along: a file can carry any number of unused ones.
+  const fileFoods = new Map()
+  for (const f of Array.isArray(d.foods) ? d.foods : []) {
+    const c = cleanFood({ ...f, source: 'import' })
+    if (c && !fileFoods.has(c.id)) fileFoods.set(c.id, c)
+  }
+  const ctx = { fileFoods, kept: new Map(), items: 0 }
   const phases = d.phases.slice(0, LIMITS.phases).map((p, idx) => {
-    let dayTypes = (Array.isArray(p?.dayTypes) ? p.dayTypes : []).slice(0, LIMITS.dayTypes).map(dt => parseDayType(dt, foodIds))
-    if (!dayTypes.length) dayTypes = [parseDayType({ name: 'Day 1' }, foodIds)]
+    let dayTypes = (Array.isArray(p?.dayTypes) ? p.dayTypes : []).slice(0, LIMITS.dayTypes).map(dt => parseDayType(dt, ctx))
+    if (!dayTypes.length) dayTypes = [parseDayType({ name: 'Day 1' }, ctx)]
     const ids = new Set(dayTypes.map(x => x.id))
     const week = Object.fromEntries(WEEKDAYS.map(k => [k, ids.has(String(p?.week?.[k])) ? String(p.week[k]) : dayTypes[0].id]))
     const w = Number(p?.weeks)
@@ -71,6 +95,8 @@ export function parseMealPlan(raw) {
     return { id: uid(), name: cleanName(p?.name) || `Phase ${idx + 1}`, weeks, dayTypes, week }
   })
   phases.forEach((p, i) => { if (p.weeks == null && i < phases.length - 1) p.weeks = 4 })
+  const foods = [...ctx.kept.values()]
+  if (JSON.stringify({ phases, foods }).length > MAX_IMPORT_CHARS) throw fail('not-meals', t('This meal plan is too large to import.'))
   const counts = {
     phases: phases.length,
     dayTypes: phases.reduce((a, p) => a + p.dayTypes.length, 0),
@@ -87,15 +113,21 @@ export function parseMealPlan(raw) {
 const sameValues = (a, b) => ['kcal', 'protein', 'carbs', 'fat'].every(k => (a[k] ?? null) === (b[k] ?? null))
 const key = s => String(s).trim().toLowerCase()
 
+// Same name and same values → the existing food; same name, other values → "<name> (imported)";
+// otherwise added. Foods are looked up by name through an index so a big file stays linear.
 function mergeFoods(n, foods) {
   const map = new Map()
+  const byName = new Map()
+  const index = f => { const k = key(f.name); if (!byName.has(k)) byName.set(k, []); byName.get(k).push(f) }
+  n.foods.forEach(index)
   for (const f of foods) {
-    const twin = n.foods.find(x => key(x.name) === key(f.name) && sameValues(x, f))
+    const same = byName.get(key(f.name)) || []
+    const twin = same.find(x => sameValues(x, f))
     if (twin) { map.set(f.id, twin.id); continue }
-    const clash = n.foods.some(x => key(x.name) === key(f.name))
-    const added = cleanFood({ ...f, id: undefined, name: clash ? `${f.name} (imported)` : f.name, source: 'import' })
+    const added = cleanFood({ ...f, id: undefined, name: same.length ? `${f.name} (imported)` : f.name, source: 'import' })
     added.id = uid()
     n.foods.push(added)
+    index(added)
     map.set(f.id, added.id)
   }
   return map

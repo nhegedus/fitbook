@@ -7,7 +7,7 @@ import { uid } from './format.js'
 import { weekStartDate } from './nutrition-calendar.js'
 
 export const DEFAULT_MEALS = ['Breakfast', 'Lunch', 'Snack', 'Dinner']
-export const LIMITS = { grams: [1,5000], kcal: [0,900], macro: [0,100], weeks: [1,104], phases: 12, dayTypes: 14, meals: 12, items: 40, name: 60, foodName: 80 }
+export const LIMITS = { grams: [1,5000], kcal: [0,900], macro: [0,100], weeks: [1,104], phases: 12, dayTypes: 14, meals: 12, items: 40, name: 60, foodName: 80, planItems: 2000, foods: 2000 }
 const WEEKDAYS = ['0', '1', '2', '3', '4', '5', '6']
 const AFTER = new Set(['stay', 'restart', 'end'])
 const NEW_PHASE_WEEKS = 4
@@ -230,9 +230,14 @@ export function useAsDefaultMeals(n, ref) { const { dayType } = at(n, ref); if (
 
 /* ------------------------------- items ------------------------------- */
 
+// Items per plan are capped too: one plan at the per-meal caps alone (12 × 14 × 12 × 40) would be
+// about the server's whole 5 MB body limit, and a state that big stops syncing altogether.
+const planItemCount = plan => plan.phases.reduce((a, ph) => a + ph.dayTypes.reduce((b, dt) => b + dt.meals.reduce((c, m) => c + m.items.length, 0), 0), 0)
+
 export function addItem(n, ref, foodId, grams) {
-  const { meal } = at(n, ref)
+  const { plan, meal } = at(n, ref)
   if (!meal || meal.items.length >= LIMITS.items || !n.foods.some(f => f.id === foodId)) return null
+  if (planItemCount(plan) >= LIMITS.planItems) return null
   const item = { id: uid(), foodId, grams: clampGrams(grams) }
   meal.items.push(item)
   return item.id
