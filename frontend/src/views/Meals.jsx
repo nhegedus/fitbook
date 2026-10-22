@@ -17,6 +17,9 @@ import {
 import { foodIndex, itemTotals, mealTotals, dayTotals, macroSplit } from '../lib/nutrition.js'
 import { addDays, weekStartDate, weekdayOf, dayFor } from '../lib/nutrition-calendar.js'
 import { MACRO_ORDER, SHORT, macroNames as NAME, g1, kc, Macro } from '../components/Macros.jsx'
+import { mealText } from '../lib/meal-text.js'
+import { shareText } from '../lib/share-text.js'
+import { useUI } from '../store/useUI.js'
 import '../meals.css'
 
 export default function Meals({ S, onImport, onExport }) {
@@ -135,6 +138,11 @@ export default function Meals({ S, onImport, onExport }) {
       <Button variant="plain" trailingIcon="chevronDown" onClick={dayTypeMenu}>{day.dayType.name}</Button>
       {usedOn > 1 && <div className="muted ml-note">{t('Changes here apply to every day using “{0}”.', day.dayType.name)}</div>}
       {day.dayType.meals.map((m, i) => <MealCard key={m.id} meal={m} foods={foods} open={open.has(m.id)} onToggle={() => toggle(m.id)}
+        onShare={async () => {
+          const r = await shareText(mealText(m, foods, { dayName: day.dayType.name }), m.name)
+          if (r === 'copied') useUI.getState().toast(t('Meal copied. Paste it anywhere.'))
+          else if (r === 'failed') useUI.getState().toast(t('Could not copy'))
+        }}
         onInsertBefore={() => addMealAt(i)} onMenu={() => mealMenu(m, i, day.dayType.meals.length)}
         onAdd={() => foodPickerSheet({ onPicked: (foodId, g) => editCapped(x => addItem(x, { ...ref, mealId: m.id }, foodId, g)) })}
         onItem={it => gramsSheet({
@@ -178,7 +186,7 @@ export function DaySummary({ dayType, foods, totals, onTargets, compact }) {
 /* One meal. Closed it is a line in the overview — name, what is in it, kcal and where the energy
    comes from; tapping it opens the foods, each with its grams and all its macros, and the meal's
    totals underneath. */
-function MealCard({ meal, foods, open, onToggle, onAdd, onItem, onMenu, onInsertBefore }) {
+function MealCard({ meal, foods, open, onToggle, onAdd, onItem, onMenu, onShare, onInsertBefore }) {
   const tot = mealTotals(meal, foods)
   const split = macroSplit(tot)
   const names = meal.items.map(it => foods.get(it.foodId)?.name || t('Deleted food'))
@@ -196,6 +204,7 @@ function MealCard({ meal, foods, open, onToggle, onAdd, onItem, onMenu, onInsert
             {split && MACRO_ORDER.map(k => <Macro key={k} k={k}> {SHORT[k]} {split[k]}%</Macro>)}
           </div>}
         </div>
+        {!!names.length && <button className="iconbtn" aria-label={t('Share meal')} onClick={e => { e.stopPropagation(); onShare() }}><Icon name="share" /></button>}
         <button className="iconbtn" aria-label={t('Meal options')} onClick={e => { e.stopPropagation(); onMenu() }}><Icon name="more" /></button>
         <Icon name="chevronDown" className="ml-chev" />
       </div>

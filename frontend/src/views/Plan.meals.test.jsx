@@ -8,7 +8,7 @@
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore, DEF } from '../store/useStore.js'
 import Plan, { PLAN_VIEW_KEY } from './Plan.jsx'
 import { ensureNutrition, ensureMine, addFood, addItem } from '../lib/nutrition-plans.js'
@@ -82,6 +82,21 @@ describe('Plan → Meals', () => {
       const breakfast = [...host.querySelectorAll('.ml-meal')].find(c => c.textContent.includes('Breakfast'))
       click(breakfast.querySelector('button[aria-label="Meal options"]'))
       expect(breakfast.querySelector('.ml-food')).toBeNull()
+    })
+    it('a meal with food has a share button that shares its text and leaves the card as it is', async () => {
+      const share = navigator.share
+      navigator.share = vi.fn(async () => {})
+      try {
+        mount()
+        const breakfast = [...host.querySelectorAll('.ml-meal')].find(c => c.textContent.includes('Breakfast'))
+        const lunch = [...host.querySelectorAll('.ml-meal')].find(c => c.textContent.includes('Lunch'))
+        expect(lunch.querySelector('button[aria-label="Share meal"]')).toBeNull()
+        await act(async () => { breakfast.querySelector('button[aria-label="Share meal"]').dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+        expect(breakfast.querySelector('.ml-food')).toBeNull()
+        const { title, text } = navigator.share.mock.calls[0][0]
+        expect(title).toBe('Breakfast')
+        expect(text).toContain('- Oats · 80 g · 311 kcal')
+      } finally { navigator.share = share }
     })
     it('the day summary comes after the meals and shows C, F and P', () => {
       mount()
