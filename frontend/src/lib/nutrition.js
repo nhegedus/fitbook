@@ -67,5 +67,14 @@ export function kcalMismatch(food) {
   return diff > MISMATCH_KCAL && diff > MISMATCH_PCT * Math.max(stated, fromMacros)
 }
 
+// Where a total's energy comes from, in whole percents of the 4/4/9 energy (what a meal card's
+// "C 52% F 26% P 22%" shows). An unknown macro counts as nothing; no energy at all is null.
+export function macroSplit(t) {
+  const c = 4 * (num(t?.carbs) ?? 0), p = 4 * (num(t?.protein) ?? 0), f = 9 * (num(t?.fat) ?? 0)
+  const sum = c + p + f
+  if (!sum) return null
+  return { carbs: Math.round(c / sum * 100), fat: Math.round(f / sum * 100), protein: Math.round(p / sum * 100) }
+}
+
 export const roundKcal = n => (num(n) == null ? null : Math.round(n))
 export const roundGrams = n => (num(n) == null ? null : n < 10 ? Math.round(n * 10) / 10 : Math.round(n))

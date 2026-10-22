@@ -22,6 +22,9 @@ const P = {
   // radial rays and was indistinguishable from `sun` at tab-bar size.
   gear: <><path d="M20.48 10.59 20.48 13.41 18.58 13.72 17.87 15.43 19 17 17 19 15.43 17.87 13.72 18.58 13.41 20.48 10.59 20.48 10.28 18.58 8.57 17.87 7 19 5 17 6.13 15.43 5.42 13.72 3.52 13.41 3.52 10.59 5.42 10.28 6.13 8.57 5 7 7 5 8.57 6.13 10.28 5.42 10.59 3.52 13.41 3.52 13.72 5.42 15.43 6.13 17 5 19 7 17.87 8.57 18.58 10.28Z" /><circle cx="12" cy="12" r="3.1" /></>,
 
+  // Fork and knife: the meal plan (fork feature, docs/NUTRITION.md).
+  utensils: <path d="M7 3.5v6M5 3.5v4.5a2 2 0 0 0 4 0V3.5M7 10v10.5M17 20.5V3.6c-2.2.9-3.5 3.3-3.5 6.4v3.5H17" />,
+
   /* ---- training ---- */
   dumbbell: <><rect x="5.9" y="7.9" width="3.2" height="8.2" rx="1.3" /><rect x="14.9" y="7.9" width="3.2" height="8.2" rx="1.3" /><path d="M9.1 12h5.8M3.6 9.9v4.2M20.4 9.9v4.2" /></>,
   barbell: <path d="M2.9 12h18.2M7.4 7.4v9.2M9.8 9.3v5.4M16.6 7.4v9.2M14.2 9.3v5.4" />,

@@ -14,6 +14,11 @@ import { useConnectionTrouble } from '../components/SyncBanner.jsx'
 import { Button } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
+import NutritionGlance from '../components/NutritionGlance.jsx'
+
+// Plan's remembered view (views/Plan.jsx PLAN_VIEW_KEY): the meals card opens Plan on Meals.
+// Spelled out here rather than imported, so Home does not load the whole Plan view for a string.
+const PLAN_VIEW_KEY = 'gym_plan_view'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -155,6 +160,9 @@ export default function Home() {
         </Button>
       </div>}
     </div>
+
+    {/* Today's meals from my own meal plan (fork feature): only when today has food planned. */}
+    <NutritionGlance S={S} onOpen={() => { try { localStorage.setItem(PLAN_VIEW_KEY, 'meals') } catch { /* private mode */ } nav('/plan') }} />
 
     {/* Jump to the gym check-in cards (QR membership codes). Shown here as a quick tap on
         arrival at the gym; folds away per user via the "Gym check-in" switch in Settings. */}

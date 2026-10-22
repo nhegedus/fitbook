@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   MACROS, foodIndex, itemTotals, sumTotals, mealTotals, dayTotals,
-  dayStatus, macroKcal, kcalMismatch, roundKcal, roundGrams,
+  dayStatus, macroKcal, kcalMismatch, roundKcal, roundGrams, macroSplit,
 } from './nutrition.js'
 
 const chicken = { id: 'f1', name: 'Chicken breast', kcal: 165, protein: 31, carbs: 0, fat: 3.6 }
@@ -109,4 +109,17 @@ describe('rounding for display', () => {
 
 it('lists the four values in display order', () => {
   expect(MACROS).toEqual(['kcal', 'protein', 'carbs', 'fat'])
+})
+
+describe('macroSplit', () => {
+  it('splits the energy 4/4/9 into whole percents', () => {
+    expect(macroSplit({ carbs: 50, protein: 25, fat: 100 / 9 })).toEqual({ carbs: 50, fat: 25, protein: 25 })
+  })
+  it('counts an unknown macro as nothing', () => {
+    expect(macroSplit({ carbs: 25, protein: null, fat: null })).toEqual({ carbs: 100, fat: 0, protein: 0 })
+  })
+  it('is null when there is no energy at all', () => {
+    expect(macroSplit({ carbs: 0, protein: 0, fat: 0 })).toBeNull()
+    expect(macroSplit(null)).toBeNull()
+  })
 })

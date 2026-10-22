@@ -14,11 +14,10 @@ import {
   ensureMine, addPlan, renamePlan, deletePlan, assignDay, makeDaySeparate,
   insertMeal, renameMeal, moveMeal, deleteMeal, addItem, setItemGrams, removeItem,
 } from '../lib/nutrition-plans.js'
-import { foodIndex, itemTotals, mealTotals, dayTotals, dayStatus, roundKcal, roundGrams, MACROS } from '../lib/nutrition.js'
+import { foodIndex, itemTotals, mealTotals, dayTotals, macroSplit } from '../lib/nutrition.js'
 import { addDays, weekStartDate, weekdayOf, dayFor } from '../lib/nutrition-calendar.js'
+import { MACRO_ORDER, SHORT, macroNames as NAME, g1, kc, Macro } from '../components/Macros.jsx'
 import '../meals.css'
-
-const LABEL = () => ({ kcal: t('kcal'), protein: t('Protein'), carbs: t('Carbs'), fat: t('Fat') })
 
 export default function Meals({ S, onImport, onExport }) {
   const ws = weekStartOf(S)
@@ -27,6 +26,10 @@ export default function Meals({ S, onImport, onExport }) {
   const [planId, setPlanId] = useState(null)
   const [weekOff, setWeekOff] = useState(0)
   const [weekday, setWeekday] = useState(() => weekdayOf(today))
+  // Which meal cards are open. Per view, never saved: a closed card is the overview, an open one
+  // the detail you came for.
+  const [open, setOpen] = useState(() => new Set())
+  const toggle = id => setOpen(o => { const x = new Set(o); x.has(id) ? x.delete(id) : x.add(id); return x })
   const foods = useMemo(() => foodIndex(n?.foods), [n?.foods])
   const ready = !!(n?.mine && n.plans?.some(p => p.id === n.mine))
   // Never create the plan on view: any write stamps nutrition as edited, and sync keeps the newest
@@ -131,8 +134,7 @@ export default function Meals({ S, onImport, onExport }) {
     {ref && <>
       <Button variant="plain" trailingIcon="chevronDown" onClick={dayTypeMenu}>{day.dayType.name}</Button>
       {usedOn > 1 && <div className="muted ml-note">{t('Changes here apply to every day using “{0}”.', day.dayType.name)}</div>}
-      <Summary dayType={day.dayType} foods={foods} onTargets={() => targetsSheet(ref)} />
-      {day.dayType.meals.map((m, i) => <MealCard key={m.id} meal={m} foods={foods}
+      {day.dayType.meals.map((m, i) => <MealCard key={m.id} meal={m} foods={foods} open={open.has(m.id)} onToggle={() => toggle(m.id)}
         onInsertBefore={() => addMealAt(i)} onMenu={() => mealMenu(m, i, day.dayType.meals.length)}
         onAdd={() => foodPickerSheet({ onPicked: (foodId, g) => editCapped(x => addItem(x, { ...ref, mealId: m.id }, foodId, g)) })}
         onItem={it => gramsSheet({
@@ -140,51 +142,83 @@ export default function Meals({ S, onImport, onExport }) {
           onSave: g => editNutrition(x => setItemGrams(x, { ...ref, mealId: m.id }, it.id, g)),
           onRemove: () => editNutrition(x => removeItem(x, { ...ref, mealId: m.id }, it.id)),
         })} />)}
-      <Button variant="tinted" onClick={() => addMealAt(day.dayType.meals.length)}>{t('Add meal')}</Button>
+      <Button variant="tinted" icon="plus" onClick={() => addMealAt(day.dayType.meals.length)}>{t('Add meal')}</Button>
+      <DaySummary dayType={day.dayType} foods={foods} onTargets={() => targetsSheet(ref)} />
     </>}
   </div>
 }
 
-function Summary({ dayType, foods, onTargets }) {
-  const tot = dayTotals(dayType, foods)
-  const st = dayStatus(tot, dayType.target)
-  const L = LABEL()
-  const hasTarget = MACROS.some(k => st[k] !== 'none')
-  return <div className="card ml-sum">
-    {MACROS.map(k => {
-      const goal = dayType.target?.[k]
-      const have = k === 'kcal' ? roundKcal(tot[k]) : roundGrams(tot[k])
-      return <div key={k} className={'ml-row ' + st[k]}>
-        <span>{L[k]}</span>
-        <div className="ml-bar"><i style={{ width: goal ? Math.min(100, (tot[k] / goal) * 100) + '%' : 0 }} /></div>
-        <span>{have}{goal ? ' / ' + goal : ''}</span>
-      </div>
-    })}
+/* The day at a glance, after the meals: calories planned against the target, then carbs, fat and
+   protein in their colours. Small on purpose: the meals are what you plan, this is the check. */
+export function DaySummary({ dayType, foods, totals, onTargets, compact }) {
+  const tot = totals || dayTotals(dayType, foods)
+  const goal = dayType.target || {}
+  const N = NAME()
+  const left = goal.kcal ? goal.kcal - (tot.kcal || 0) : null
+  return <div className={'card ml-sum' + (compact ? ' compact' : '')}>
+    <div className="ml-sum-kcal">
+      <div><span className="ml-sum-big">{kc(tot.kcal)}</span><span className="muted"> {goal.kcal ? '/ ' + goal.kcal.toLocaleString() + ' ' : ''}kcal</span></div>
+      {left != null && <span className={'small ' + (left < -goal.kcal * 0.05 ? 'ml-over' : 'muted')}>
+        {left >= 0 ? t('{0} left', Math.round(left).toLocaleString()) : t('{0} over', Math.round(-left).toLocaleString())}
+      </span>}
+    </div>
+    {goal.kcal > 0 && <div className="ml-bar kcal"><i style={{ width: Math.min(100, (tot.kcal / goal.kcal) * 100) + '%' }} /></div>}
+    <div className="ml-sum-macros">
+      {MACRO_ORDER.map(k => <div key={k}>
+        <div className={'small mc-' + k}>{N[k]}</div>
+        <div className="ml-sum-g"><b>{g1(tot[k])} g</b>{goal[k] ? <span className="muted"> / {goal[k]}</span> : null}</div>
+        <div className={'ml-bar mb-' + k}><i style={{ width: goal[k] ? Math.min(100, (tot[k] / goal[k]) * 100) + '%' : 0 }} /></div>
+      </div>)}
+    </div>
     {tot.incomplete && <div className="small ff-warn">{t('Some foods have missing values, so these totals are too low.')}</div>}
-    <Button variant="ghost" onClick={onTargets}>{hasTarget ? t('Edit targets') : t('Set targets')}</Button>
+    {onTargets && <Button size="sm" variant="ghost" onClick={onTargets}>{goal.kcal || goal.protein || goal.carbs || goal.fat ? t('Edit targets') : t('Set targets')}</Button>}
   </div>
 }
 
-function MealCard({ meal, foods, onAdd, onItem, onMenu, onInsertBefore }) {
+/* One meal. Closed it is a line in the overview — name, what is in it, kcal and where the energy
+   comes from; tapping it opens the foods, each with its grams and all its macros, and the meal's
+   totals underneath. */
+function MealCard({ meal, foods, open, onToggle, onAdd, onItem, onMenu, onInsertBefore }) {
   const tot = mealTotals(meal, foods)
+  const split = macroSplit(tot)
+  const names = meal.items.map(it => foods.get(it.foodId)?.name || t('Deleted food'))
+  const preview = !names.length ? t('No foods yet') : names.length === 1 ? names[0] : t('{0} and {1} more', names[0], names.length - 1)
+  const N = NAME()
   return <>
     <button className="ml-insert" aria-label={t('Add a meal here')} onClick={onInsertBefore}>+</button>
-    <div className="card">
-      <div className="ml-meal-h">
-        <span className="grow">{meal.name}</span>
-        <span className="muted small">{roundKcal(tot.kcal)} kcal · {roundGrams(tot.protein)} g P</span>
-        <button className="iconbtn" aria-label={t('Meal options')} onClick={onMenu}><Icon name="more" /></button>
-      </div>
-      {meal.items.map(it => {
-        const f = foods.get(it.foodId)
-        const r = itemTotals(f, it.grams)
-        return <div key={it.id} className="ml-item" {...tappable(() => onItem(it))}>
-          <span className="grow">{f?.name || t('Deleted food')}</span>
-          <span className="muted">{it.grams} g</span>
-          <span className="muted">{r.kcal == null ? '?' : roundKcal(r.kcal)} kcal</span>
+    <div className={'card ml-meal' + (open ? ' open' : '')}>
+      <div className="ml-meal-h" aria-expanded={open} {...tappable(onToggle)}>
+        <div className="grow">
+          <div className="ml-meal-name">{meal.name}</div>
+          <div className="muted small ml-ellip">{preview}</div>
+          {!!names.length && <div className="small ml-meal-stats">
+            <b>{kc(tot.kcal)} kcal</b>
+            {split && MACRO_ORDER.map(k => <Macro key={k} k={k}> {SHORT[k]} {split[k]}%</Macro>)}
+          </div>}
         </div>
-      })}
-      <Button variant="ghost" onClick={onAdd}>{t('Add food')}</Button>
+        <button className="iconbtn" aria-label={t('Meal options')} onClick={e => { e.stopPropagation(); onMenu() }}><Icon name="more" /></button>
+        <Icon name="chevronDown" className="ml-chev" />
+      </div>
+      {open && <div className="ml-body">
+        {meal.items.map(it => {
+          const r = itemTotals(foods.get(it.foodId), it.grams)
+          return <div key={it.id} className="ml-food" {...tappable(() => onItem(it))}>
+            <div className="grow">
+              <div>{foods.get(it.foodId)?.name || t('Deleted food')}</div>
+              <span className="ml-g">{it.grams} g</span>
+            </div>
+            <div className="ml-food-r">
+              <div className="ml-kcal">{kc(r.kcal)} <span className="muted small">kcal</span></div>
+              <div className="small">{MACRO_ORDER.map(k => <Macro key={k} k={k}> {SHORT[k]} {g1(r[k])}</Macro>)}</div>
+            </div>
+          </div>
+        })}
+        {!!meal.items.length && <div className="ml-foot">
+          {MACRO_ORDER.map(k => <div key={k}><b className={'mc-' + k}>{g1(tot[k])}</b><span className={'small mc-' + k}>{N[k]}</span></div>)}
+          <div><b>{kc(tot.kcal)}</b><span className="small muted">{t('kcal')}</span></div>
+        </div>}
+        <Button size="sm" variant="ghost" icon="plus" onClick={onAdd}>{t('Add food')}</Button>
+      </div>}
     </div>
   </>
 }

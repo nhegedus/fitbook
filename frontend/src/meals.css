@@ -1,4 +1,4 @@
-/* frontend/src/meals.css — the Meals view of Plan and its sheets (fork feature, docs/NUTRITION.md) */
+/* frontend/src/meals.css — the Meals view of Plan, its sheets and Home's meals card (fork feature, docs/NUTRITION.md) */
 .meals{display:flex;flex-direction:column;gap:12px;margin-top:12px}
 .ml-plans,.ml-days{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .ml-week{display:flex;align-items:center;gap:8px}
@@ -6,19 +6,55 @@
 .ml-day{display:flex;flex-direction:column;align-items:center;min-width:44px;padding:6px 4px;border-radius:12px;background:var(--surface-2);border:0;color:inherit}
 .ml-day.on{background:var(--acc);color:var(--on-acc)}
 .ml-day .dt{font-size:10px;opacity:.75;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ml-sum{display:grid;gap:8px}
-.ml-row{display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;font-size:14px}
-.ml-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
-.ml-bar>i{display:block;height:100%;background:currentColor;opacity:.4}
-.ml-row.ok .ml-bar>i{background:var(--green);opacity:1}
-.ml-row.under .ml-bar>i{background:var(--orange);opacity:1}
-.ml-row.over .ml-bar>i{background:var(--red);opacity:1}
-.ml-meal-h{display:flex;align-items:baseline;gap:8px}
-.ml-meal-h .grow{flex:1;font-weight:600}
-.ml-item{display:flex;gap:8px;padding:8px 0;border-top:1px solid rgba(127,127,127,.2)}
-.ml-item .grow{flex:1}
-.ml-insert{align-self:center;border:0;background:none;color:var(--acc);font-size:20px;line-height:1;padding:0 12px}
 .ml-note{font-size:13px}
+
+/* macro colours: carbs teal, fat purple, protein blue — the same everywhere */
+.mc-carbs{color:var(--teal)}
+.mc-fat{color:var(--purple)}
+.mc-protein{color:var(--blue)}
+.ml-meal-stats .mc-carbs,.ml-meal-stats .mc-fat,.ml-meal-stats .mc-protein{font-weight:600}
+
+/* meal cards */
+.ml-meal{padding-top:12px;padding-bottom:12px}
+.ml-meal-h{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
+.ml-meal-h .grow{flex:1;min-width:0}
+.ml-meal-name{font-weight:600;font-size:17px}
+.ml-ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ml-meal-stats{margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.ml-chev{opacity:.5;transition:transform .2s}
+.ml-meal.open .ml-chev{transform:rotate(180deg)}
+.ml-body{margin-top:8px}
+.ml-food{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(127,127,127,.18);cursor:pointer}
+.ml-food .grow{flex:1;min-width:0}
+.ml-g{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;
+  color:var(--acc);background:color-mix(in srgb,var(--acc) 15%,transparent)}
+.ml-food-r{text-align:end;white-space:nowrap}
+.ml-kcal{font-weight:600}
+.ml-food-r .small span{margin-inline-start:6px}
+.ml-foot{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center;padding:10px 0 4px;border-top:1px solid rgba(127,127,127,.18)}
+.ml-foot>div{display:flex;flex-direction:column}
+.ml-foot b{font-size:17px}
+.ml-insert{align-self:center;border:0;background:none;color:var(--acc);font-size:16px;line-height:1;padding:2px 14px;margin:-11px 0;opacity:.55}
+
+/* day summary, after the meals */
+.ml-sum{display:grid;gap:8px;padding-top:12px;padding-bottom:10px}
+.ml-sum-kcal{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ml-sum-big{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.ml-sum-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.ml-sum-g{font-size:14px;margin:2px 0 4px}
+.ml-over{color:var(--red)}
+.ml-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.ml-bar>i{display:block;height:100%;border-radius:3px;background:var(--grey)}
+.ml-bar.kcal>i{background:var(--acc)}
+.ml-bar.mb-carbs>i{background:var(--teal)}
+.ml-bar.mb-fat>i{background:var(--purple)}
+.ml-bar.mb-protein>i{background:var(--blue)}
+
+/* Home: meals today */
+.ml-glance-kcal{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;margin:10px 0 6px}
+.ml-glance-macros{margin-inline-start:auto;display:flex;gap:8px;font-weight:600}
+
+/* sheets */
 .food-form{display:flex;flex-direction:column;gap:10px}
 .ff-row{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center}
 .ff-warn{color:var(--orange)}
