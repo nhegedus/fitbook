@@ -18,6 +18,8 @@
 .ml-meal{padding-top:12px;padding-bottom:12px}
 .ml-meal-h{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
 .ml-meal-h .grow{flex:1;min-width:0}
+.ml-meal-h .tap-main{background:none;border:0;color:inherit;font:inherit}
+.ml-meal-h .tap-main>span{display:block}
 .ml-meal-name{font-weight:600;font-size:17px}
 .ml-ellip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ml-meal-stats{margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
@@ -27,7 +29,7 @@
 .ml-food{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(127,127,127,.18);cursor:pointer}
 .ml-food .grow{flex:1;min-width:0}
 .ml-g{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;
-  color:var(--acc);background:color-mix(in srgb,var(--acc) 15%,transparent)}
+  color:var(--acc);background:rgba(127,127,127,.15);background:color-mix(in srgb,var(--acc) 15%,transparent)}
 .ml-food-r{text-align:end;white-space:nowrap}
 .ml-kcal{font-weight:600}
 .ml-food-r .small span{margin-inline-start:6px}

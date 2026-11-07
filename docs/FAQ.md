@@ -11,7 +11,7 @@ to support it anyway, there's [Buy Me a Coffee](https://buymeacoffee.com/duartes
 
 No, there are three ways to use it:
 
-- **Try it:** the [online demo](https://opengym.duarte-santos.ch/demo/) runs entirely in your
+- **Try it:** the [online demo](https://opengym.ch/demo/) runs entirely in your
   browser with example data.
 - **Phone only:** the Android app needs no server and no account; everything stays on the phone.
   See [MOBILE.md](MOBILE.md).
@@ -20,16 +20,17 @@ No, there are three ways to use it:
 
 ### Is there an iPhone app?
 
-Not in the App Store, and Apple doesn't allow installing apps from anywhere else. On an iPhone you can
-self-host and add openGym to your home screen from Safari (it's a full PWA that works offline), or
-build the native app onto your own phone with Xcode. Both are described in [MOBILE.md](MOBILE.md).
-An App Store build is on the [roadmap](../ROADMAP.md).
+Yes: [openGym is in the App Store](https://apps.apple.com/app/id6822275400), for iPhone and Apple
+Watch, in every App Store country. It works on the phone alone or connected to your own server.
+You can also add a self-hosted openGym to your home screen from Safari (a full PWA that works
+offline), or build the app onto your own phone with Xcode; both are in [MOBILE.md](MOBILE.md).
 
-### Why isn't it on the Play Store?
+### Is it on Google Play?
 
-That's deliberate. The APK is signed, published with a `.sha256` next to every release, and the app
-checks for updates itself. Get it from the
-[latest release](https://github.com/DuarteSantos8/openGym/releases/latest).
+Not yet, it's next: Google wants a round of closed testing first. Until then the signed APK is the
+way to go. It's published with a `.sha256` next to every release, comes in three sizes (Standard,
+Plus, HD) and updates itself. Get it from the
+[latest release](https://github.com/DuarteSantos8/openGym/releases/latest) or [opengym.ch](https://opengym.ch).
 
 ### Where is my data?
 
@@ -40,8 +41,8 @@ everything as one file at any time under **Settings → Data & backup**.
 
 ### Does the app send anything anywhere?
 
-Your instance has no telemetry and phones home to nobody. On first start it downloads the exercise
-images and animations from the upstream dataset, once. The AI coach, if an admin turns it on, sends
+Your instance has no telemetry and phones home to nobody. The exercise pictures and animations ship
+inside the web image, so not even those are downloaded. The AI coach, if an admin turns it on, sends
 the training data it needs to the provider you configured; [AI_COACH.md](AI_COACH.md) lists exactly
 what. Push notifications go through your browser's push service, as all web push does.
 
@@ -99,9 +100,10 @@ an exercise and something measured. See [DATA_IMPORTS.md](DATA_IMPORTS.md).
 
 ### Can I reuse the exercise images in my own project?
 
-Not on openGym's say-so. The images and animations aren't covered by openGym's license and their
-ownership is disputed; openGym only downloads them for your instance. Details in
-[NOTICE.md](../NOTICE.md).
+No. They are © Aliaksandr Makatserchyk, Gym visual, licensed for use in openGym only and not covered
+by openGym's license. Anything outside openGym needs your own licence from
+[gymvisual.com](https://gymvisual.com/). Details in [NOTICE.md](../NOTICE.md). The exercise text in
+[catalogue/](../catalogue/README.md) is a different story: that's openGym's, and fixes are welcome.
 
 ### Where do I ask something that isn't here?
 

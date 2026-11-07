@@ -195,17 +195,19 @@ function MealCard({ meal, foods, open, onToggle, onAdd, onItem, onMenu, onShare,
   return <>
     <button className="ml-insert" aria-label={t('Add a meal here')} onClick={onInsertBefore}>+</button>
     <div className={'card ml-meal' + (open ? ' open' : '')}>
-      <div className="ml-meal-h" aria-expanded={open} {...tappable(onToggle)}>
-        <div className="grow">
-          <div className="ml-meal-name">{meal.name}</div>
-          <div className="muted small ml-ellip">{preview}</div>
-          {!!names.length && <div className="small ml-meal-stats">
+      {/* The name is the stretched primary (.tap-main) and Share / options sit above it as siblings
+          (card dismiss pass, design-review.test.js), so neither tap can land on the other. */}
+      <div className="ml-meal-h tap-host">
+        <button type="button" className="grow tap-main" aria-expanded={open} onClick={onToggle}>
+          <span className="ml-meal-name">{meal.name}</span>
+          <span className="muted small ml-ellip">{preview}</span>
+          {!!names.length && <span className="small ml-meal-stats">
             <b>{kc(tot.kcal)} kcal</b>
             {split && MACRO_ORDER.map(k => <Macro key={k} k={k}> {SHORT[k]} {split[k]}%</Macro>)}
-          </div>}
-        </div>
-        {!!names.length && <button className="iconbtn" aria-label={t('Share meal')} onClick={e => { e.stopPropagation(); onShare() }}><Icon name="share" /></button>}
-        <button className="iconbtn" aria-label={t('Meal options')} onClick={e => { e.stopPropagation(); onMenu() }}><Icon name="more" /></button>
+          </span>}
+        </button>
+        {!!names.length && <button className="iconbtn" aria-label={t('Share meal')} onClick={onShare}><Icon name="share" /></button>}
+        <button className="iconbtn" aria-label={t('Meal options')} onClick={onMenu}><Icon name="more" /></button>
         <Icon name="chevronDown" className="ml-chev" />
       </div>
       {open && <div className="ml-body">

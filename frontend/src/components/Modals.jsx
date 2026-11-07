@@ -46,7 +46,7 @@ const drainScrollRestore = close => {
 
 // One bottom sheet (or centered dialog) with swipe-to-dismiss.
 function Sheet({ sheet }) {
-  const { closeSheet } = useUI()
+  const closeSheet = useUI(s => s.closeSheet)   // not the whole store: an open sheet re-rendered on every rest tick
   const ref = useRef(null)
   // startY null = no gesture. axis stays null until the finger has travelled far enough to
   // tell a vertical pull from a sideways scroll; 'x' hands the gesture to whatever scrolls
@@ -130,7 +130,7 @@ function Sheet({ sheet }) {
     return (
       <div>
         <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-        <div className="center">{sheet.render(close)}</div>
+        <div className={'center' + (sheet.wide ? ' wide' : '')}>{sheet.render(close)}</div>
       </div>
     )
   }
@@ -164,7 +164,11 @@ export default function Modals() {
     if (sheets.length > prev) {
       for (let i = prev; i < sheets.length; i++) {
         sheetEntries.current.push({ openedAt: location.href, live: true })
-        history.pushState({ openGymSheet: true }, '')
+        // Numbered one past the page's, as the router numbers a push: a page that takes this
+        // entry over (closeThenNav) or is pushed after it gets its index from it, and Settings'
+        // back reads that index to tell whether there is a page to go back to.
+        const idx = history.state?.idx
+        history.pushState(typeof idx === 'number' ? { openGymSheet: true, idx: idx + 1 } : { openGymSheet: true }, '')
         pushedEntries.current++
       }
     } else if (sheets.length < prev) {
@@ -225,6 +229,8 @@ export default function Modals() {
     const b = document.body.style
     b.position = 'fixed'; b.top = -y + 'px'; b.left = '0'; b.right = '0'; b.width = '100%'
     return () => {
+      // A workout layout change can move the anchor while this sheet is open.
+      const restoreY = -(parseFloat(b.top) || 0)
       b.position = b.top = b.left = b.right = b.width = ''
       // Tell anything that scrolls for its own reasons how long this will go on (afterScrollRestore),
       // but only when a sheet really did close. React StrictMode runs this cleanup immediately after
@@ -233,10 +239,10 @@ export default function Modals() {
       // dev, on time in production. In production this cleanup runs on the close path alone.
       const close = useUI.getState().sheets.length ? 0 : ++closes
       if (close) restoreUntil = Date.now() + RESTORE_MS
-      window.scrollTo(0, y)
+      window.scrollTo(0, restoreY)
       // iOS scrolls asynchronously; a restore issued in the same task as the un-pin can be applied
       // a frame late or against the still-short layout. Say it once more on the next frame.
-      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => { if (document.body.style.position !== 'fixed') window.scrollTo(0, y) })
+      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => { if (document.body.style.position !== 'fixed') window.scrollTo(0, restoreY) })
       // If the sheet closed with the keyboard still up (tap "+" in the picker, then finish),
       // iOS scrolls the page again while the keyboard dismisses — after the line above ran.
       // Ask once more when that animation is over. The window-level guard in
@@ -251,9 +257,16 @@ export default function Modals() {
       // (issue #224). At this point the sheet's field is already out of the DOM but the keyboard
       // has not started to go, so the visual viewport still tells the truth. The timer is armed
       // either way, because the hand-over is the only thing that drains the queue.
+      //
+      // A workout list that collapsed a finished exercise while the sheet was up has already put
+      // its own anchor back (WorkoutScrollAnchor); it says so, and the re-assert stands down.
       const hadKeyboard = keyboardOpen()
+      let anchored = false
+      const onAnchor = () => { anchored = true }
+      window.addEventListener('workout-scroll-anchor', onAnchor, { once: true })
       window.setTimeout(() => {
-        if (hadKeyboard && document.body.style.position !== 'fixed') window.scrollTo(0, y)
+        window.removeEventListener('workout-scroll-anchor', onAnchor)
+        if (hadKeyboard && !anchored && document.body.style.position !== 'fixed') window.scrollTo(0, restoreY)
         drainScrollRestore(close)
       }, RESTORE_MS)
     }

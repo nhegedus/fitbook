@@ -3,7 +3,7 @@ import { useUI } from '../store/useUI.js'
 import { useStore } from '../store/useStore.js'
 import { api } from '../lib/api.js'
 import Icon from '../components/Icon.jsx'
-import { Button, Switch, TextField } from '../components/ui.jsx'
+import { Button, Switch, TextArea, TextField } from '../components/ui.jsx'
 import { confirmSheet } from '../sheets.jsx'
 
 /* The operator's side of the Coach, laid out as a guided setup: one master switch, numbered
@@ -25,6 +25,27 @@ const rel = ts => {
   if (s < 3600) return Math.floor(s / 60) + ' min ago'
   if (s < 86400) return Math.floor(s / 3600) + ' h ago'
   return Math.floor(s / 86400) + ' d ago'
+}
+
+// Extra static headers for the endpoint, one `Name: value` per line — e.g. a gateway's
+// routing/session header (opencode Go's `x-opencode-session`). Parsed client-side so a
+// typo reads as a message on the card, not a 400 the admin has to decode. Empty clears.
+export const headersToText = h => h && typeof h === 'object'
+  ? Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n')
+  : ''
+export function parseHeadersText(text) {
+  const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean)
+  if (!lines.length) return { headers: null }
+  const out = {}
+  for (const line of lines) {
+    const i = line.indexOf(':')
+    if (i < 1) return { error: `not a Name: value line: ${line.slice(0, 40)}` }
+    const name = line.slice(0, i).trim()
+    const value = line.slice(i + 1).trim()
+    if (!name || !value) return { error: `not a Name: value line: ${line.slice(0, 40)}` }
+    out[name] = value
+  }
+  return { headers: out }
 }
 
 // Which chips go under which heading. Runtime-backed providers are the ones that need the
@@ -138,7 +159,7 @@ export default function AdminCoach() {
   let n = 1
   let idx = 0
   const num = () => n++
-  const stepAt = () => { const i = idx++; return { open: i === (firstTodo === -1 ? -1 : firstTodo), key: i + ':' + (i === firstTodo) } }
+  const stepAt = () => { const i = idx++; return { open: i === (firstTodo === -1 ? -1 : firstTodo), stepKey: i + ':' + (i === firstTodo) } }
 
   // Off = a quiet, optional feature: one clean pitch and one button, no half-dimmed controls.
   if (!d.enabled) return <div className="card">
@@ -188,13 +209,25 @@ export default function AdminCoach() {
 
       {/* ---------- endpoint (compatible only) ---------- */}
       {needsEndpoint && <Step n={num()} title="Endpoint" hint={d.baseUrl || 'Where the model runs'} done={step2Done} {...stepAt()}>
-        <div className="adm-hint">The address of any server that speaks OpenAI's chat API: <b>Ollama</b>, <b>LM Studio</b>, <b>vLLM</b>, <b>OpenRouter</b>, or a gateway of your own. Just the base: no <code>/v1</code>, no key in the URL.</div>
+        <div className="adm-hint">The address of any server that speaks OpenAI's chat API: <b>Ollama</b>, <b>LM Studio</b>, <b>vLLM</b>, <b>OpenRouter</b>, or a gateway of your own. The base as your provider documents it, with or without its version (<code>/v1</code>, <code>/v4</code>), and no key in the URL.</div>
         <div className="adm-field">
           <label>Base URL</label>
           <TextField key={d.baseUrl || ''} defaultValue={d.baseUrl || ''} placeholder="http://ollama:11434  or  https://openrouter.ai/api" inputMode="url" autoCapitalize="none" autoCorrect="off"
             onBlur={e => e.target.value !== (d.baseUrl || '') && patch({ baseUrl: e.target.value })} />
         </div>
         <div className="adm-hint" style={{ margin: 0 }}>The host is written to the job log, so you can always see where requests went.</div>
+        <div className="adm-field">
+          <label>Extra headers (optional)</label>
+          <TextArea key={headersToText(d.headers)} defaultValue={headersToText(d.headers)} placeholder={'x-opencode-session: 550e8400-…'} autoCapitalize="none" autoCorrect="off" rows={2}
+            onBlur={e => {
+              const cur = headersToText(d.headers)
+              if (e.target.value === cur) return
+              const p = parseHeadersText(e.target.value)
+              if (p.error) { toast(p.error); e.target.value = cur; return }
+              patch({ headers: p.headers })
+            }} />
+        </div>
+        <div className="adm-hint" style={{ margin: 0 }}>One <code>Name: value</code> per line, sent with every request to this endpoint. For gateways that demand routing headers. Never <code>Authorization</code> or <code>Content-Type</code> — those are refused.</div>
       </Step>}
 
       {/* ---------- credential ---------- */}
@@ -210,7 +243,7 @@ export default function AdminCoach() {
             {/* The key is encrypted at rest and never shown again, so this is the one action on the
                 card that cannot be walked back. Every other irreversible action in the app asks first;
                 until 2026-09-22 this one did not. */}
-            <Button size="sm" danger disabled={busy} onClick={() => confirmSheet({
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => confirmSheet({
               title: 'Remove this credential?',
               message: 'The Coach stops working for everyone on this instance until a new key is added. The stored key cannot be recovered.',
               confirmText: 'Remove', danger: true, onConfirm: disconnect,
@@ -292,6 +325,10 @@ export default function AdminCoach() {
           <div className="adm-kv"><span className="k">Max message length</span>
             <span className="v"><input className="num" type="number" min="200" max="4000" defaultValue={d.maxMessageLen} disabled={busy}
               onBlur={e => +e.target.value !== d.maxMessageLen && patch({ maxMessageLen: +e.target.value })} /></span></div>
+          <div className="adm-hint" style={{ marginTop: 10 }}>The ceiling on a single provider answer. Reasoning models — DeepSeek-style endpoints, or a "thinking" Gemini/OpenAI model — count their hidden reasoning against it, so a plan can fail with "the answer was cut off at the output limit" even though the plan itself is short. Raise it if that happens; keep it within the model's own output limit.</div>
+          <div className="adm-kv"><span className="k">Max output tokens</span>
+            <span className="v"><input className="num" type="number" min="1024" max="65536" defaultValue={d.maxOutputTokens} disabled={busy}
+              onBlur={e => +e.target.value !== d.maxOutputTokens && patch({ maxOutputTokens: +e.target.value })} /></span></div>
 
           <div className="adm-group-t" style={{ marginTop: 14 }}>Compare with others</div>
           <div className="row between" style={{ gap: 12, alignItems: 'flex-start' }}>
@@ -326,15 +363,15 @@ export default function AdminCoach() {
         <summary>Activity <Icon name="chevronRight" className="chev" /></summary>
         <div className="adm-fold-b">
           <div className="tiles" style={{ textAlign: 'start', marginBottom: 10 }}>
-            <div className="tile"><div className="l">Jobs today</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.jobsToday}</div></div>
-            <div className="tile"><div className="l">Last success</div><div className="v" style={{ fontSize: '.85rem' }}>{rel(d.lastSuccess?.at)}</div></div>
+            <div className="tile"><div className="l">Jobs today</div><div className="v v-sm">{d.jobsToday}</div></div>
+            <div className="tile"><div className="l">Last success</div><div className="v" style={{ fontSize: 'var(--fs-footnote)' }}>{rel(d.lastSuccess?.at)}</div></div>
           </div>
           {d.lastError && <>
             <div className="adm-group-t">Last failure</div>
             <div className="adm-result bad" style={{ marginTop: 0, marginBottom: 10 }}>
               <b>{failureTitle(d.lastError.errorClass)}</b>
               {d.lastError.detail ? <span className="small">{d.lastError.detail}</span> : null}
-              <div className="dim" style={{ fontSize: '.72rem', marginTop: 4 }}>{rel(d.lastError.at)}</div>
+              <div className="dim" style={{ fontSize: 'var(--fs-caption2)', marginTop: 4 }}>{rel(d.lastError.at)}</div>
             </div>
           </>}
           <div className="adm-group-t">Recent jobs</div>
@@ -353,9 +390,10 @@ export default function AdminCoach() {
 
 /* ---------------------------------- pieces ---------------------------------- */
 
-function Step({ n, title, hint, done, open, forceOpen, children }) {
-  // `key` remounts the <details> when the wizard advances, so the next step unfolds itself.
-  return <details className={'adm-step ' + (done ? 'done' : 'todo')} open={open || forceOpen}>
+function Step({ n, title, hint, done, open, forceOpen, stepKey, children }) {
+  // `stepKey` remounts the <details> when the wizard advances, so the next step unfolds itself.
+  // On the element itself: React wants a key written out, not spread in with the other props.
+  return <details key={stepKey} className={'adm-step ' + (done ? 'done' : 'todo')} open={open || forceOpen}>
     <summary>
       <span className="adm-num">{done ? <Icon name="check" /> : n}</span>
       <span className="adm-step-t"><b>{title}</b><span>{hint}</span></span>

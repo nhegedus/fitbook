@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextTrainingDay, modeOf, isTimed, fmtSec, setLabel, defaultConfig, buildSets, freestyleConfig, exLine, workoutVolume, bestWeightFor, bestWeightForEntry, completedRepsOf, metricRowsForEntry, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep, cascadeWeight, insertWarmupRow, makeWarmupAt, canBeWarmup, makeWorkAt, removeRowAt, removeLastSet, setSpanAt, workSetsDone, setsDone, setsDoneActive, setUnits, doneUnits, setUnitsTotal, pairAdjacent, unpairSuperset, supersetUnits, sessionSections, applyIntensifierPlan, pinnedNoteFor, exNoteFor, effectiveRoutineIds, effectiveRoutines, effectiveRoutineId, effectiveRoutine, lastEntryFor, entryExcluded, entryRoutineId, setsRepsOf } from './history.js'
+import { nextTrainingDay, modeOf, isTimed, fmtSec, setLabel, defaultConfig, pickedExerciseConfig, buildSets, freestyleConfig, exLine, workoutVolume, bestWeightFor, bestWeightForEntry, completedRepsOf, metricRowsForEntry, effortOf, stepEffort, capEffort, isBw, isPerSide, sideReps, repStep, cascadeWeight, insertWarmupRow, makeWarmupAt, canBeWarmup, makeWorkAt, removeRowAt, removeLastSet, setSpanAt, workSetsDone, setsDone, setsDoneActive, setUnits, doneUnits, setUnitsTotal, pairAdjacent, unpairSuperset, supersetUnits, sessionSections, applyIntensifierPlan, pinnedNoteFor, exNoteFor, effectiveRoutineIds, effectiveRoutines, effectiveRoutineId, effectiveRoutine, lastEntryFor, entryExcluded, entryRoutineId, setsRepsOf } from './history.js'
 import { makeSideSet, setSideField, toggleSide, WEIGHT_ORIGIN_MANUAL } from './workout-model.js'
 import { EXDB } from './exercises.js'
 import { todayISO, isoOf } from './format.js'
@@ -334,6 +334,31 @@ describe('defaultConfig', () => {
     expect(defaultConfig(BW, 'time')).toEqual({ sets: 3, sec: 45, weight: 0, mode: 'time', bodyweight: true })
     expect('bodyweight' in defaultConfig(LIFT)).toBe(false)
   })
+  it('starts a catalogue hold as a timed hold, and leaves how a saved entry reads alone', () => {
+    const PLANK = '0463'
+    expect(defaultConfig(PLANK)).toEqual({ sets: 3, sec: 45, weight: 0, mode: 'time', bodyweight: true })
+    expect(defaultConfig(PLANK, 'reps')).toMatchObject({ reps: 10, mode: 'reps' })
+    expect(modeOf({ id: PLANK })).toBe('reps')
+    expect(defaultConfig('0464').mode).toBe('reps') // a plank with a twist moves
+  })
+})
+
+describe('pickedExerciseConfig', () => {
+  it('starts a one-arm or one-leg exercise per side, ten reps a side', () => {
+    // 4837 dumbbell single arm bent over row, 1027 assisted single leg press
+    expect(pickedExerciseConfig('4837')).toMatchObject({ mode: 'reps', side: true, reps: 20 })
+    expect(isPerSide(pickedExerciseConfig('1027'))).toBe(true)
+    expect(pickedExerciseConfig('4837', 'time')).toMatchObject({ mode: 'time', side: true, sec: 45 })
+  })
+  it('leaves everything else as defaultConfig has it', () => {
+    expect(pickedExerciseConfig('1801')).toEqual(defaultConfig('1801'))   // one arm lat stretch
+    expect(pickedExerciseConfig('0667')).toEqual(defaultConfig('0667'))   // raise single leg push up
+    expect(pickedExerciseConfig(LIFT)).toEqual(defaultConfig(LIFT))
+    expect(pickedExerciseConfig(CARDIO)).toEqual(defaultConfig(CARDIO))
+  })
+  it('keeps defaultConfig flat, so a saved target without the flag stays one row a set', () => {
+    expect('side' in defaultConfig('4837')).toBe(false)
+  })
 })
 
 /* ---------- bodyweight and per side (issues #31/#32/#33) ---------- */
@@ -469,6 +494,37 @@ describe('freestyleConfig', () => {
     expect(rows.map(r => r.w)).toEqual([50, 75, 87.5, 100, 100])
     expect(rows.slice(0, 3).every(r => r.phase === 'warmup')).toBe(true)
     expect(rows.slice(3).every(r => r.phase === undefined)).toBe(true)
+  })
+
+  // A 55 lb bench used to get warm-ups at 25 and 40 lb, lighter than the 45 lb bar it is done
+  // with. A barbell rung never goes under the bar; everything without a bar ramps as before.
+  it('never ramps a barbell warm-up below the bar it is done with', () => {
+    const S = { unit: 'lb', exWeights: {}, workouts: [] }
+    const bench = { id: '0025', mode: 'reps', sets: 3, reps: 10, weight: 55, warmupSets: 1 }
+    expect(buildSets(S, bench, { step: 5 }).map(r => r.w)).toEqual([45, 55, 55, 55])
+    // two rungs from the bar: 45, then half the gap left
+    expect(buildSets(S, { ...bench, warmupSets: 2 }, { step: 5 }).map(r => r.w).slice(0, 2)).toEqual([45, 50])
+    // heavy lifts ramp exactly as before: every rung is above the bar anyway
+    expect(buildSets(S, { ...bench, weight: 135, warmupSets: 3 }, { step: 5 }).map(r => r.w).slice(0, 3)).toEqual([65, 100, 115])
+    // the athlete's own bar weight wins, and "no bar" (0) floors nothing
+    expect(buildSets({ ...S, barWeights: { '0025': 35 } }, bench, { step: 5 })[0].w).toBe(35)
+    expect(buildSets({ ...S, barWeights: { '0025': 0 } }, bench, { step: 5 })[0].w).toBe(25)
+    // a bar heavier than the work weight still never makes a warm-up heavier than the work set
+    expect(buildSets({ ...S, barWeights: { '0025': 65 } }, bench, { step: 5 })[0].w).toBe(55)
+    // a dumbbell lift has no bar: half, as always
+    expect(buildSets(S, { id: '0289', mode: 'reps', sets: 1, reps: 10, weight: 50, warmupSets: 1 }, { step: 5 })[0].w).toBe(25)
+    // the in-session button takes the same floor
+    const rows = [{ w: 55, r: 10, done: false }]
+    expect(insertWarmupRow(rows, 'reps', bench, 5, 45)[0].w).toBe(45)
+    expect(insertWarmupRow(rows, 'reps', bench, 5)[0].w).toBe(25)
+  })
+
+  it('an added warm-up on an assistance machine gives more help, ramping down to the work weight', () => {
+    // 0017 assisted pull-up: 40 (1.5 × 25 rounded up to the step), then halfway down to 35
+    const rows = [{ w: 25, r: 10, done: false }]
+    const one = insertWarmupRow(rows, 'reps', { id: '0017' }, 5)
+    expect(one[0].w).toBe(40)
+    expect(insertWarmupRow(one, 'reps', { id: '0017' }, 5)[1].w).toBe(35)
   })
 
   it('caps the planned warm-ups and ignores nonsense values', () => {
@@ -909,46 +965,6 @@ describe('sessionSections', () => {
   })
 })
 
-describe('superset editing', () => {
-  it('pairs adjacent entries without mutating the source and keeps the display units contiguous', () => {
-    const entries = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-    const paired = pairAdjacent(entries, 1, 2, 'sg-new')
-
-    expect(paired).toEqual([{ id: 'a' }, { id: 'b', sg: 'sg-new' }, { id: 'c', sg: 'sg-new' }])
-    expect(entries).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
-    expect(supersetUnits(paired)).toEqual([[0], [1, 2]])
-  })
-
-  it('merges both contiguous groups when their boundary entries are paired', () => {
-    const entries = [
-      { id: 'a', sg: 'left' }, { id: 'b', sg: 'left' },
-      { id: 'c', sg: 'right' }, { id: 'd', sg: 'right' }
-    ]
-    const merged = pairAdjacent(entries, 1, 2)
-
-    expect(merged.map(e => e.sg)).toEqual(['left', 'left', 'left', 'left'])
-    expect(entries.map(e => e.sg)).toEqual(['left', 'left', 'right', 'right'])
-  })
-
-  it('unpairs one entry and removes sg values left without an adjacent partner', () => {
-    const entries = [
-      { id: 'a', sg: 'group' }, { id: 'b', sg: 'group' }, { id: 'c', sg: 'group' },
-      { id: 'd', sg: 'orphan' }
-    ]
-    const unpaired = unpairSuperset(entries, 1)
-
-    expect(unpaired).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }])
-    expect(entries.map(e => e.sg)).toEqual(['group', 'group', 'group', 'orphan'])
-  })
-
-  it('rejects a non-adjacent pairing request', () => {
-    const entries = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-
-    expect(() => pairAdjacent(entries, 0, 2, 'sg-invalid')).toThrow(/adjacent/)
-    expect(entries).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
-  })
-})
-
 
 describe('session row helpers', () => {
   it('cascadeWeight propagates to same-flag undone rows and never rewrites done sets', () => {
@@ -964,6 +980,32 @@ describe('session row helpers', () => {
     expect(next[3].w).toBe(62.5)           // same flag (work), undone
     expect(next[4].w).toBe(62.5)           // same flag (work), undone
     expect(next[1].w).toBe(20)             // different flag (warm-up) untouched
+  })
+
+  // Editing warm-up 1 of an incline bench ramp used to copy the new load onto the later
+  // warm-ups, so each one had to be put back by hand. Each rung keeps its own load.
+  it('cascadeWeight leaves the later warm-up rungs on their ramp loads', () => {
+    const S = { unit: 'lb', exWeights: {}, workouts: [] }
+    const rows = buildSets(S, { id: '0047', mode: 'reps', sets: 4, reps: 8, weight: 125, warmupSets: 3 }, { step: 5 })
+    expect(rows.map(r => r.w)).toEqual([60, 90, 105, 125, 125, 125, 125])
+    const next = cascadeWeight(rows, 0, 70)   // the caller writes the edited row itself
+    expect(next.map(r => r.w)).toEqual([60, 90, 105, 125, 125, 125, 125])
+    const later = cascadeWeight(rows, 1, 100)
+    expect(later.map(r => r.w)).toEqual([60, 90, 105, 125, 125, 125, 125])
+    // a work-set edit still carries through the work sets and never reaches back into the ramp
+    expect(cascadeWeight(rows, 3, 130).map(r => r.w)).toEqual([60, 90, 105, 125, 130, 130, 130])
+  })
+
+  it('cascadeWeight leaves later one-side warm-up rungs alone too', () => {
+    const rows = [
+      { ...makeSideSet({ w: 10, r: 16 }), phase: 'warmup' },
+      { ...makeSideSet({ w: 15, r: 16 }), phase: 'warmup' },
+      makeSideSet({ w: 25, r: 16 }),
+    ]
+    const next = cascadeWeight(rows, 0, 5, 'L')
+    expect(next[1].sides.L.w).toBe(15)
+    expect(next[1].sides.R.w).toBe(15)
+    expect(next[2].sides.L.w).toBe(25)
   })
 
   it('cascadeWeight deleting the weight removes the key from following undone rows only', () => {
@@ -1070,14 +1112,14 @@ describe('warm-up rows identified by phase alone', () => {
     expect(workSetsDone({ entries: [{ sets: [imported, work] }] })).toBe(1)
   })
 
-  it('cascadeWeight keeps phase-only warm-ups in their own lane', () => {
+  it('cascadeWeight treats a phase-only warm-up as a warm-up: the edit stays on its row', () => {
     const rows = [
       { w: 40, r: 10, phase: 'warmup' },
       { w: 45, r: 10, phase: 'warmup' },
       { w: 100, r: 5 },
     ]
     const next = cascadeWeight(rows, 0, 50)
-    expect(next[1].w).toBe(50)
+    expect(next[1].w).toBe(45)
     expect(next[2].w).toBe(100)
   })
 })
@@ -1184,56 +1226,6 @@ describe('exNoteFor', () => {
     expect(exNoteFor({ exNotes: { '0025': ' seat 4, pin 7 ' } }, '0025')).toBe('seat 4, pin 7')
     expect(exNoteFor({ exNotes: { '0025': '   ' } }, '0025')).toBeNull()
     expect(exNoteFor({}, '0025')).toBeNull()
-  })
-})
-
-describe('nextTrainingDay', () => {
-  // 2026-08-18 is a Tuesday; the week map is keyed by getDay(), so 0 is Sunday.
-  const TUE = '2026-08-18'
-  const base = (over = {}) => ({
-    dayPlan: {},
-    routines: [{ id: 'r1', name: 'A', ex: [{ id: '0001' }] }, { id: 'r2', name: 'B', ex: [{ id: '0002' }] }],
-    week: {},
-    ...over
-  })
-
-  it('finds the next scheduled day and names its routine', () => {
-    const S = base({ week: { 4: 'r2' } })                 // Thursday
-    expect(nextTrainingDay(S, TUE)).toMatchObject({ iso: '2026-08-20', weekday: 4 })
-    expect(nextTrainingDay(S, TUE).routine.name).toBe('B')
-  })
-
-  it('looks forward only — today itself is never the answer', () => {
-    // Only Tuesday is scheduled and today is Tuesday, so the next one is a week out. (The UI
-    // cannot reach this: a day with a session takes the other branch and never asks.)
-    const S = base({ week: { 2: 'r1' } })
-    expect(nextTrainingDay(S, TUE)).toMatchObject({ iso: '2026-08-25', weekday: 2 })
-  })
-
-  it('wraps around the end of the week', () => {
-    const S = base({ week: { 1: 'r1' } })                 // Monday, six days on
-    expect(nextTrainingDay(S, TUE)).toMatchObject({ iso: '2026-08-24', weekday: 1 })
-  })
-
-  it('is null when every day is rest', () => {
-    expect(nextTrainingDay(base(), TUE)).toBeNull()
-  })
-
-  it('skips a day whose routine no longer exists', () => {
-    const S = base({ week: { 3: 'gone', 5: 'r1' } })
-    expect(nextTrainingDay(S, TUE)).toMatchObject({ iso: '2026-08-21', weekday: 5 })
-  })
-
-  it('skips a routine with no exercises — starting it would open an empty session', () => {
-    const S = base({ routines: [{ id: 'r1', name: 'A', ex: [] }, { id: 'r2', name: 'B', ex: [{ id: '1' }] }], week: { 3: 'r1', 5: 'r2' } })
-    expect(nextTrainingDay(S, TUE)).toMatchObject({ weekday: 5 })
-  })
-
-  it('respects a per-date override in both directions', () => {
-    const moved = base({ week: {}, dayPlan: { '2026-08-19': 'r1' } })
-    expect(nextTrainingDay(moved, TUE)).toMatchObject({ iso: '2026-08-19' })
-    const off = base({ week: { 3: 'r1', 5: 'r2' }, dayPlan: { '2026-08-19': 'rest' } })
-    expect(nextTrainingDay(off, TUE)).toMatchObject({ weekday: 5 })
   })
 })
 
@@ -1563,19 +1555,32 @@ describe('switching a row between warm-up and work', () => {
     const rows = [{ w: 40, r: 8, phase: 'warmup', warmup: true, done: true }, { w: 100, r: 5, done: true, at: 7 }, { w: 100, r: 5, done: false, type: 'dropset', drops: [{ w: 80, r: 4 }], rir: 2 }]
     const plain = [...rows.slice(0, 2), { w: 100, r: 5, done: false, rir: 2 }]
     const next = makeWarmupAt(plain, 2)
-    expect(next).toEqual([rows[0], { w: 100, r: 5, done: false, phase: 'warmup', warmup: true }, rows[1]])
-    expect(makeWarmupAt(rows, 1)[1]).toEqual({ w: 100, r: 5, done: true, phase: 'warmup', warmup: true, at: 7 })
+    expect(next).toEqual([rows[0], { w: 100, r: 5, done: false, phase: 'warmup', warmup: true, edited: true }, rows[1]])
+    expect(makeWarmupAt(rows, 1)[1]).toEqual({ w: 100, r: 5, done: true, phase: 'warmup', warmup: true, edited: true, at: 7 })
     expect(makeWarmupAt(rows, 0)).toBe(rows)
   })
 
-  it('makeWarmupAt leaves drop, rest-pause and per-side rows as they are', () => {
+  it('makeWarmupAt leaves drop and rest-pause rows as they are', () => {
     const drop = [{ w: 60, r: 8, done: true }, { w: 100, r: 5, done: true, type: 'dropset', drops: [{ w: 80, r: 4 }] }]
     expect(makeWarmupAt(drop, 1)).toBe(drop)
     const rp = [{ w: 60, r: 8, done: true }, { w: 100, r: 12, done: true, type: 'restpause', clusters: [{ r: 4, rest: 15 }] }]
     expect(makeWarmupAt(rp, 1)).toBe(rp)
-    const side = [{ w: 30, r: 6, done: true }, { w: 30, r: 11, done: false, sides: { L: { w: 30, r: 5, done: true }, R: { w: 0, r: 6, done: false } } }]
-    expect(makeWarmupAt(side, 1)).toBe(side)
-    expect([canBeWarmup(drop[1]), canBeWarmup(rp[1]), canBeWarmup(side[1]), canBeWarmup(drop[0])]).toEqual([false, false, false, true])
+    const sideDrop = [{ w: 30, r: 6 }, { w: 30, r: 10, type: 'dropset', sides: { L: { w: 30, r: 5, type: 'dropset', drops: [{ w: 20, r: 4 }] }, R: { w: 30, r: 5 } } }]
+    expect(makeWarmupAt(sideDrop, 1)).toBe(sideDrop)
+    expect([canBeWarmup(drop[1]), canBeWarmup(rp[1]), canBeWarmup(sideDrop[1]), canBeWarmup(drop[0])]).toEqual([false, false, false, true])
+  })
+
+  // #575: the set menu of a per-side exercise had no "Make it a warm-up set".
+  it('a per-side set becomes a per-side warm-up, each side kept, and goes back with nothing lost', () => {
+    const side = { w: 30, r: 11, done: false, rir: 1, sides: { L: { w: 30, r: 5, done: true, rir: 2 }, R: { w: 32.5, r: 6, done: false, rir: 1 } } }
+    const rows = [{ w: 30, r: 10, done: true, sides: { L: { w: 30, r: 5, done: true }, R: { w: 30, r: 5, done: true } } }, side]
+    expect(canBeWarmup(side)).toBe(true)
+    const warm = makeWarmupAt(rows, 1)
+    expect(warm[0]).toEqual({ phase: 'warmup', warmup: true, edited: true, sides: { L: { w: 30, r: 5, done: true }, R: { w: 32.5, r: 6, done: false } }, r: 11, w: 32.5, done: false })
+    expect(warm[1]).toBe(rows[0])
+    const back = makeWorkAt(warm, 0)
+    expect(back[0]).toEqual({ sides: { L: { w: 30, r: 5, done: true }, R: { w: 32.5, r: 6, done: false } }, r: 11, w: 32.5, done: false })
+    expect(rows[1]).toEqual(side)   // the input is never written to
   })
 
   it('a warm-up made one is left out of the best weight and the work-set count', () => {

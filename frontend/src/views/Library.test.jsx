@@ -66,7 +66,9 @@ describe('Library favourites', () => {
   it('keeps the header button reachable without shredding the title', () => {
     expect(cssSource).toContain('.hdr>div{min-width:0}')
     expect(cssSource).toContain('.hdr>.btn{flex:none}')
-    expect(cssSource).toMatch(/@media \(max-width:420px\)\{\.hdr h1\{font-size:30px\}\}/)
+    // the page title is --fs-large, which drops from 34 to 30 px on phone widths (P1 type scale)
+    expect(cssSource).toMatch(/\.hdr h1\{font-size:var\(--fs-large\)/)
+    expect(cssSource).toMatch(/@media \(max-width:420px\)\{:root\{--fs-large:1\.875rem\}\}/)
     const h1 = cssSource.match(/^\.hdr h1\{([^}]*)\}/m)
     expect(h1?.[1]).toContain('overflow-wrap:break-word')
     expect(h1[1]).not.toContain('overflow-wrap:anywhere')
@@ -96,6 +98,8 @@ describe('Library exercise-name casing per language', () => {
     it(`${lang}: every translated row is ${CASED_NAME_LANGS.includes(lang) ? 'left in its own casing' : 'title-cased'}`, () => {
       const pack = packs[`../exercise-names/${lang}.js`]
       _setLangState(lang, {}, null, pack)
+      // Starred so they render on the first page: a partial pack may not cover the first rows.
+      mocks.S.favEx = Object.keys(pack).slice(0, 3)
       const rows = [...render().querySelectorAll('.item .tt')].slice(1)   // drop "Create your own"
       expect(rows.length).toBeGreaterThan(0)
       const translated = rows.filter(el => Object.values(pack).some(n => el.textContent.startsWith(n)))
@@ -156,5 +160,30 @@ describe('Library header count', () => {
     const narrow = cssSource.match(/@media \(max-width:360px\)\{\.hdr\.lib-hdr>\.sub\.lib-count\{([^}]*)\}\}/)?.[1] || ''
     expect(narrow).toContain('white-space:normal')
     expect(narrow).toContain('overflow:visible')
+  })
+})
+
+describe('Library similar exercises', () => {
+  const search = (host, text) => {
+    const input = host.querySelector('.search input')
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    act(() => { setter.call(input, text); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  }
+  const label = host => host.querySelector('.similar-label')?.textContent || null
+
+  it('offers what comes close instead of "No match" when nothing matches exactly', () => {
+    const host = render()
+    search(host, 'dumbbell curl qwxz')
+    expect(label(host)).toBe('No exact match. These come close:')
+    expect(host.textContent).not.toContain('No match')
+    expect(names(host).slice(0, 5).some(n => /dumbbell.*curl/.test(n))).toBe(true)
+  })
+
+  it('lists similar ones under a short result list, without repeating a result', () => {
+    const host = render()
+    search(host, 'face pull')
+    expect(label(host)).toBe('Similar exercises')
+    const all = names(host)
+    expect(new Set(all).size).toBe(all.length)
   })
 })

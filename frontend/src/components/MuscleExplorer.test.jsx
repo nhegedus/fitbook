@@ -5,6 +5,9 @@
 // body-part tap regardless — the only one of the three exercise browsers that did.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// The first render indexes all 5,600+ catalogue exercises for search and the muscle map, which
+// takes over a second here on its own and longer on a busy runner.
+vi.setConfig({ testTimeout: 15000 })
 import { createRoot } from 'react-dom/client'
 import MuscleExplorer from './MuscleExplorer.jsx'
 
@@ -105,5 +108,45 @@ describe('MuscleExplorer search: the × and live count the Library has (#338)', 
     act(() => { chipByText(host, 'upper arms').click() })
     expect(count()).toBeTruthy()
     expect(clear()).toBeNull()
+  })
+})
+
+// #553: Stats' untrained muscles open the explorer on that muscle.
+describe('MuscleExplorer opened on a muscle', () => {
+  it('starts with it chosen and its exercises listed', () => {
+    const host = render({ initial: 'biceps', onDetail: vi.fn() })
+    expect(isOn(muscleChip(host, 'Biceps'))).toBe(true)
+    expect(host.textContent).toContain('Exercises for Biceps')
+  })
+})
+
+// #669: the Add exercise picker's "By muscle" lost the Favourites chip its list view has.
+describe('MuscleExplorer Favourites chip', () => {
+  it('lists the favourites that train the chosen muscle', async () => {
+    const { EXDB } = await import('../lib/exercises.js')
+    const { musclesOf } = await import('../lib/muscles.js')
+    const curl = EXDB.find(e => musclesOf(e).biceps === 1)
+    const press = EXDB.find(e => !musclesOf(e).biceps && e.bp === 'chest')
+    mocks.S.favEx = [curl.id, press.id]
+    const onPick = vi.fn()
+    const host = render({ onPick })
+    act(() => { muscleChip(host, 'Biceps').click() })
+    const fav = muscleChip(host, 'Favourites')
+    expect(fav, 'a Favourites chip next to All').toBeTruthy()
+    expect(fav.textContent).toContain('(1)')
+    act(() => { fav.click() })
+    expect(isOn(muscleChip(host, 'Favourites'))).toBe(true)
+    const rows = [...host.querySelectorAll('.list .item')]
+    expect(rows).toHaveLength(1)
+    act(() => { rows[0].querySelector('.tap-main').click() })
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: curl.id }))
+    act(() => { chipByText(host, 'All').click() })
+    expect(host.querySelectorAll('.list .item').length).toBeGreaterThan(1)
+  })
+
+  it('is not there without favourites', () => {
+    const host = render({ onPick: vi.fn() })
+    act(() => { muscleChip(host, 'Biceps').click() })
+    expect(muscleChip(host, 'Favourites')).toBeUndefined()
   })
 })

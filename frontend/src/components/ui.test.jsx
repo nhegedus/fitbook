@@ -114,9 +114,9 @@ describe('Slider under dir=rtl', () => {
 
 describe('Stepper', () => {
   // controlled like every real caller: the parent re-renders with the new value
-  function Host({ initial, onChange, step }) {
+  function Host({ initial, onChange, step, ...props }) {
     const [v, setV] = React.useState(initial)
-    return <Stepper value={v} step={step} onChange={n => { setV(n); onChange(n) }} />
+    return <Stepper value={v} step={step} onChange={n => { setV(n); onChange(n) }} {...props} />
   }
   const mountStepper = (value, onChange, step = 1) => {
     act(() => root.render(<Host initial={value} step={step} onChange={onChange} />))
@@ -185,6 +185,32 @@ describe('Stepper', () => {
     const plus = mountStepper(10, onChange)
     act(() => plus.click())
     expect(onChange).toHaveBeenCalledWith(11)
+  })
+
+  it('names controls for their field when requested', () => {
+    const onChange = vi.fn()
+    act(() => root.render(<Host initial={10} step={1} onChange={onChange} ariaLabel="load" />))
+    expect(host.querySelector('button[aria-label="Decrease load"]')).toBeTruthy()
+    expect(host.querySelector('button[aria-label="Increase load"]')).toBeTruthy()
+  })
+
+  it('uses the caller step rule', () => {
+    const onChange = vi.fn()
+    act(() => root.render(<Host initial={61.3} step={2.5} onChange={onChange}
+      onStep={(value, increment, direction) => value + increment * 10 + direction} />))
+    act(() => host.querySelector('button[aria-label="Increase"]').click())
+    expect(onChange).toHaveBeenCalledWith(87.3)
+  })
+
+  it('disables all editing controls', () => {
+    const onChange = vi.fn()
+    act(() => root.render(<Host initial={61.3} step={2.5} onChange={onChange} disabled />))
+    const [minus, plus] = host.querySelectorAll('button')
+    expect(minus.disabled).toBe(true)
+    expect(plus.disabled).toBe(true)
+    expect(host.querySelector('input').disabled).toBe(true)
+    act(() => plus.click())
+    expect(onChange).not.toHaveBeenCalled()
   })
 })
 
@@ -285,5 +311,21 @@ describe('NumberField select on tap', () => {
     act(() => input.focus())
     act(() => input.blur())
     expect(mouseup(input).defaultPrevented).toBe(false)
+  })
+})
+
+describe('Stepper display word', () => {
+  it('shows a word instead of the number at a special value, and the + still steps from it', () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    const host = document.createElement('div'); document.body.appendChild(host)
+    const root = createRoot(host)
+    const seen = []
+    act(() => root.render(<Stepper value={0} step={5} unit="%" display="Bar" onChange={v => seen.push(v)} />))
+    expect(host.querySelector('.stp-word').textContent).toBe('Bar')
+    expect(host.querySelector('input')).toBeNull()
+    expect(host.textContent).not.toContain('%')
+    act(() => { host.querySelectorAll('button')[1].click() })
+    expect(seen.at(-1)).toBe(5)
+    act(() => root.unmount()); host.remove()
   })
 })

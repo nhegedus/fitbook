@@ -2,7 +2,7 @@
 // in server.js is covered end to end in server-nudge.test.js; the rules themselves are here.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nudgeFor, nudgeMinute, nudgeWindowOpen, toneOf, lineIndex } from '../nudge.js';
+import { excusedOn, nudgeFor, nudgeMinute, nudgeWindowOpen, toneOf, lineIndex } from '../nudge.js';
 import { nudgePush } from '../push-messages.js';
 import { NUDGE_COPY } from '../nudge-copy.js';
 
@@ -61,6 +61,18 @@ test('coach week / rotation: the day right after a workout is rest, the second d
   assert.equal(nudgeFor(s, '2026-09-09'), 'pull', 'two days off in a row');
 });
 
+// #261, the mirror of frontend/src/lib/nudge.test.js: a day with a note on it is excused.
+test('a noted day is excused: not nudged, and not counted towards the back-off', () => {
+  const notes = { '2026-09-07': { tag: 'sick', _ts: 1 } };
+  assert.equal(nudgeFor(S({ workouts: [w('2026-09-04')], dayNotes: notes }), '2026-09-07'), null);
+  assert.equal(nudgeFor(S({ workouts: [w('2026-09-04')], dayNotes: { '2026-09-07': { text: 'Flight to Lisbon', _ts: 1 } } }), '2026-09-07'), null);
+  assert.equal(nudgeFor(S({ workouts: [w('2026-09-04')], dayNotes: { '2026-09-07': { _ts: 2 } } }), '2026-09-07'), 'push', 'a cleared note is no excuse');
+  const s = S({ workouts: [w('2026-09-04')], dayNotes: notes });
+  assert.deepEqual(['2026-09-09', '2026-09-11', '2026-09-14', '2026-09-16'].map(d => !!nudgeFor(s, d)), [true, true, true, false]);
+  assert.equal(excusedOn(S({ dayNotes: { '2026-09-07': { tag: 'nope', text: '  ' } } }), '2026-09-07'), false);
+  assert.equal(excusedOn({ dayNotes: 'x' }, '2026-09-07'), false);
+});
+
 test('a malformed state reads as nothing to nudge about', () => {
   assert.equal(nudgeFor({}, '2026-09-07'), null);
   assert.equal(nudgeFor({ workouts: 'x', routines: null, week: { 1: 'push' } }, '2026-09-07'), null);
@@ -97,4 +109,24 @@ test('push text: by tone, one line per date, routine name filled in, localized',
   }
   // a name with $-patterns is inserted literally
   assert.match(nudgePush('en', 'friendly', { name: '$& $1' }, '2026-09-04').body + nudgePush('en', 'friendly', { name: '$& $1' }, '2026-09-05').body, /\$& \$1/);
+});
+
+// The nudge looks back over up to fifteen days, and every day asks the queue rules again. They
+// used to work the whole queue out on each question (a dedupe over every id, a Set of every
+// routine), so a crafted state the size a PUT allows held the server's one thread for seconds per
+// nudge, in the tick and on every GET /api/nudge-check. Now it is worked out once per state.
+// These are under the 5 MB limit; each took several seconds before.
+test('nudge: a crafted state costs one pass, not one per day looked back on', () => {
+  const today = '2026-10-23';
+  const within = state => {
+    const t = Date.now();
+    nudgeFor(state, today);
+    return Date.now() - t;
+  };
+  const long = [...Array.from({ length: 400000 }, (_, i) => 'x' + i), 'push'];
+  // a long queue of ids that name no routine, its one real session due from today and never done,
+  // so every earlier day is looked back on and asks the queue again
+  assert.ok(within(S({ week: {}, queue: { ids: long, since: 1, startsOn: today } })) < 1000);
+  // the same, with that session pinned to a later day, so every day falls to the weekday list
+  assert.ok(within(S({ queue: { ids: long, since: 1, startsOn: '2026-10-01' }, dayPlan: { '2026-11-01': 'push' }, week: { 0: 'pull', 1: 'pull', 2: 'pull', 3: 'pull', 4: 'pull', 5: 'pull', 6: 'pull' } })) < 1000);
 });

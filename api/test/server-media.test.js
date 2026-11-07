@@ -385,6 +385,9 @@ test('PUT /api/data still answers 200 when the media bookkeeping fails', async t
   const r = await h.pushState(refState());
   assert.equal(r.status, 200);
   assert.equal((await r.json()).ok, true);
+  // The line goes to stderr before the reply, but the test hears the two on separate pipes: on a
+  // busy machine the reply can be read first.
+  for (let i = 0; i < 100 && !/media noteState/.test(h.log); i++) await new Promise(res => setTimeout(res, 20));
   assert.match(h.log, /media noteState/);
   const saved = JSON.parse(fs.readFileSync(path.join(h.dataDir, `state-${U1}.json`), 'utf8'));
   assert.equal(saved._rev, 1, 'the state itself was saved');
@@ -411,7 +414,7 @@ test('folders are 0700 and files 0600, and an admin deleting the profile removes
 test('/api/config carries the caps; MEDIA_UPLOADS=0 takes the block and every route away', async t => {
   const on = await start(t, { MEDIA_QUOTA_MB: '100', MEDIA_VIDEO_MAX_SEC: '30' });
   const cfg = await (await fetch(`${on.api}/api/config`)).json();
-  assert.deepEqual(cfg.media, { imageMB: 2, gifMB: 8, videoMB: 40, videoSec: 30, quotaMB: 100, workouts: true });   // `workouts`: a logged workout may carry them too
+  assert.deepEqual(cfg.media, { imageMB: 2, gifMB: 8, videoMB: 40, videoSec: 30, quotaMB: 100, workouts: true, days: true, sets: true });   // `workouts`: a logged workout may carry them too; `days`: a photo filed under a day (#557); `sets`: a set's own form video
 
   const off = await start(t, { MEDIA_UPLOADS: '0' });
   const cfgOff = await (await fetch(`${off.api}/api/config`)).json();

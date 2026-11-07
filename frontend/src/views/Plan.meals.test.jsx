@@ -69,7 +69,7 @@ describe('Plan → Meals', () => {
       expect(breakfast.textContent).toContain('Oats')
       expect(breakfast.textContent).toContain('311 kcal')
       expect(breakfast.querySelector('.ml-food')).toBeNull()
-      click(breakfast.querySelector('.ml-meal-h'))
+      click(breakfast.querySelector('.ml-meal-h .tap-main'))
       const row = breakfast.querySelector('.ml-food')
       expect(row.querySelector('.ml-g').textContent).toBe('80 g')
       expect(row.textContent).toContain('C 53')
